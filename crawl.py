@@ -2,7 +2,7 @@ import db.models as models
 from collections import defaultdict
 from itertools import chain
 from urlparse import urlparse
-from multiprocessing Process, Queue
+from multiprocessing import Process, Queue
 
 import time
 WHITESPACE = ['\n', '\t', ' ']
@@ -67,57 +67,82 @@ def get_text(soup):
 
 def is_ip_address(s):
     for i, octet in enumerate(s.split('.')):
+        if not octet.isdigit():
+            return False
         if not (0 <= int(octet) <= 255):
             return False
     return i == 3
 
 def splitport(host):
-    return host.split(':')
-    
-def parse_url(url):
-    fixed = fix_scheme(url)
-    parsed = urlparse.urlparse(fixed)
-    (scheme, netloc, path,
-     params, query, fragment) = parsed
-    
-    
-    
+    if host.count(':') == 1:
+        return host.rsplit('.', 1)
+    return host, None
 
+
+
+# most of this logic is borrowed
+class URLAttrs(object):
+    def __init__(self, url):
+        self.parse_url(url)
+    
+    def parse_url(self, url):
+        fixed = fix_scheme(url)
+        self.url = urlparse(fixed)
+        print(type(self.url))
+        (self.scheme, self.netloc, self.path,
+         self.params, self.query, self.fragment) = self.url
+        self.host, self.port = splitport(self.netloc)
+        if '.' in self.host and not is_ip_address(self.host):
+            self.domain, self.tld  = self.host.rsplit('.', 1)
+        else:
+            self.domain = self.host
+            self.tld = ''
+    
 def worker(work_queue, data_queue):
     data = {}
+    sleeps = 0
     while True:
+        if sleeps > 5:
+            break
         if work_queue.empty():
-            time.sleep(5)
+            print(work_queue)
+            time.sleep(1)
+            sleeps += 1
             continue
-        url = work_queue.get()
-        
-        url_connection = urllib.urlopen(url.geturl())
+        urlobj = work_queue.get()
+        url_connection = urllib.urlopen(urlobj.url.geturl())
         soup = BeautifulSoup(url_connection.read())
         data['links'] = get_links(soup)
         data['words'] = get_text(soup)
-        data['url'] = url.geturl()
-        data['scheme'] = url.scheme
-        domain, port = 
-        data['domain'] = url.netloc
-
-        data[
+        data['url'] = urlobj
+        data_queue.put(urlobj.url.geturl())
         del soup
+        break
         
 
 
-class CrawlerManager(multiprocessing.Manager):
-
-    def __init__(self, *args, **kwargs):
-        
-        
 if __name__ == '__main__':
     
     work_queue = Queue(QUEUE_MAXSIZE)
     data_queue = Queue(QUEUE_MAXSIZE)
-    work_queue.put(TEST_SITE)
+    work_queue.put(URLAttrs(TEST_SITE))
+
+    try:
+        crawlers = [Process(target=worker, args=(work_queue, data_queue))
+                    for _ in range(MAX_PROCESSES)]
+        
     
-    crawlers = [Process(target=worker, args=(work_queue, data_queue))
-                for _ in range(MAX_PROCESSES)]
-    c.start()
-    c.join()
-    
+        for crawler in crawlers:
+            crawler.start()
+            
+        print("work is happening")
+            
+        for crawler in crawlers:
+            crawler.join()
+        print(data_queue.get())
+    except KeyboardInterrupt as e:
+        if hasattr(__module__, crawlers):
+            for crawler in crawlers:
+                crawler.join()
+        print("GOODFLKJSDFLKJSDLFKJSFDL")
+        

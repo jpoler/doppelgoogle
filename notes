@@ -1,0 +1,8 @@
+need splitport function
+
+if a web address doesnt start with http://, add it
+
+scheme
+
+at first, we will naively ignore subdomains
+

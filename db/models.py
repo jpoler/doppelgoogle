@@ -16,10 +16,12 @@ class Domain(StructuredNode):
 class WebPage(StructuredNode):
     url = StringProperty(unique_index=True, required=True)
     visited = DateTimeProperty(default=lambda: datetime.datetime.now())
+    encoding = StringProperty()
 
     domain = RelationshipFrom('Domain', 'WEBPAGE_WITHIN_DOMAIN', cardinality=cardinality.One)
     words = RelationshipTo('Word', 'PAGE_CONTAINS_WORD', cardinality=cardinality.ZeroOrMore)
     links = RelationshipTo('WebPage', 'LINKS_TO', cardinality=cardinality.ZeroOrMore)
+
 
 class Word(StructuredNode):
     name = StringProperty(unique_index=True, required=True)

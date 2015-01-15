@@ -177,7 +177,7 @@ def worker(work_queue, data_queue, done_urls, pipe, message_queue):
         print("=================================WORKER========================================")
         print(e)
     finally:
-        return
+        return None
         
 class LockDict(dict):
 
@@ -225,6 +225,8 @@ class MasterOfPuppets(object):
                                   self.done, slave_pipe, self.message_queue))
                 p.start()
                 self.crawlers.append((p, master_pipe))
+
+
             while True:
 
                 # check for messages from puppets
@@ -340,3 +342,5 @@ if __name__ == '__main__':
 
 # signals?
 # https://docs.python.org/2/library/signal.html
+
+# atexit

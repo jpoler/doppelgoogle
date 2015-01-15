@@ -6,3 +6,49 @@ scheme
 
 at first, we will naively ignore subdomains
 
+## How to safely kill all processes
+
+## Make no assumptions about where the KeyboardInterrupt will be caught
+## this is wrong, master should be the one to recieve signal i think but make sure
+
+## if caught in master, send message to all children telling them to quit, and then
+## block for each process until it dies
+
+## if caught in child, send message to master through pipe notifying that a keyboard interrupt has been
+## recieved, and clean up what was being done
+
+## master must poll for messages at start of while True, and so must child
+
+
+## RAGING CLUES:
+
+## in emacs shell, the C-c interrupt isn't being caught consistantly
+## in terminal window, C-c is caught first time
+## after exit, bash never comes back, but is still running
+## C-c becomes nonresponsive in both emacs and bash now
+
+# (env)jdp@ThinkPad-T440s:~/dopplegoogle$ ps -A | grep pts/6
+#  3369 pts/6    00:00:00 bash
+#  3433 pts/6    00:00:01 python
+
+# plain terminal
+     # │         │         │      ├─gnome-terminal─┬─bash───python─┬─4*[python───2*[{python}]]
+     # │         │         │      │                │               └─{python}
+     # │         │         │      │                ├─bash───pstree
+     # │         │         │      │                ├─gnome-pty-helpe
+     # │         │         │      │                └─3*[{gnome-terminal}]
+
+
+# within emacs
+     # │         │         │      ├─emacs24─┬─bash───python─┬─4*[python───2*[{python}]]
+     # │         │         │      │         │               └─{python}
+     # │         │         │      │         └─2*[{emacs24}]
+
+# http://stackoverflow.com/questions/21665341/python-multiprocessing-and-independence-of-children-processes
+# this answer doesn't seem right? ive definitely experienced the parent quitting but children
+# persist?
+
+# signals?
+# https://docs.python.org/2/library/signal.html
+
+# atexit

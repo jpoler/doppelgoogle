@@ -1,7 +1,7 @@
 default: crawl
 
 start:
-	bash --init-file env/bin/activate -i
+	@bash --init-file env/bin/activate -i
 
 neoup:
 	@echo 'Starting neo...'

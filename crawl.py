@@ -8,7 +8,6 @@ import time
 import urllib
 from bs4 import BeautifulSoup
 import traceback
-import atexit
 
 WHITESPACE = ['\n', '\t', ' ']
 HTTP_SCHEME = "http://"
@@ -24,11 +23,6 @@ QUEUE_MAXSIZE = 1024
 
 STOP = 1
 KILL = 2
-
-@atexit.register
-def clean_up():
-    print("Bye")
-
 
 def word_generator(s):
     whitespace_handled = False
@@ -49,13 +43,10 @@ def word_generator(s):
     raise StopIteration
 
 def fix_scheme(url):
-    
     if (url.startswith(HTTP_SCHEME) or url.startswith(HTTPS_SCHEME)):
         return url
     url = url.lstrip('/')
     return HTTP_SCHEME + url
-
-
 
 def get_links(soup):
     links = {}
@@ -270,8 +261,7 @@ class MasterOfPuppets(object):
                             # print(urlobj.url.geturl())
 
                     self.done[data['url']] = True
-
-                    
+           
 
                 
 

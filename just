@@ -11,5 +11,6 @@ neoup:
 crawl:
 	python crawl.py
 
-edit:
-	vi crawl.py
+z:
+	@echo 'Zombie processes:'
+	@echo `ps -A | grep python`

@@ -4,6 +4,7 @@ import db.models as models
 from collections import defaultdict
 from urlparse import urlparse
 from multiprocessing import Process, JoinableQueue, Lock, Pipe
+from Queue import Full
 import time
 import urllib
 from bs4 import BeautifulSoup
@@ -17,10 +18,12 @@ UNWANTED_TAGS = set(['script', 'style'])
 LINKS = ['a']
 WANTED_LANGS = set(['en'])
 UNWANTED_WORDS = set(['the', 'of', 'to', 'and', 'a', 'in', 'is', 'it'])
+BLOCK_TIME = 1
 
 MAX_PROCESSES = 4
 QUEUE_MAXSIZE = 1024
 
+# constants for message passing
 STOP = 1
 KILL = 2
 
@@ -110,71 +113,65 @@ class URLAttrs(object):
             self.domain = self.host
             self.tld = ''
 
-def do_work(url):
+def process_url(url):
+    data = {}
+    urlobj = URLAttrs(url)
     try:
-        data = {}
-        urlobj = URLAttrs(url)
-        url_connection = urllib.urlopen(urlobj.url.geturl())
-        soup = BeautifulSoup(url_connection.read())
-        data['links'] = get_links(soup)
-        data['words'] = get_text(soup)
-        data['url'] = urlobj.url.geturl()
-        del soup
-    # is this block totally necessary?
-    # what is being caught here that could not be caught in worker?
-    # if do work fails, and we are sure that we mark the task as done on the work_queue
-    # it is probably safe to just catch the exception and continue loop
-    # maybe place a try except just within the infinite loop of worker
-
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        print("DO_WORK=================================================================DO_WORK")
-        print(e)
-        data = None
-    finally:
-        return data
-        
-def worker(work_queue, data_queue, done_urls, pipe, message_queue):
-    try:
-        sleeps = 0
-        while True:
-            if pipe.poll():
-                message = pipe.recv()
-                print("received message from master ", message)
-                if message == STOP:
-                    print("quitting")
-                    # somehow this return does not terminate the process
-                    # exitcode is None! meaning that the process hasn't terminated
-                    # which explains why .join() blocks indefinitely
-                    return
-                time.sleep(1)
-                sleeps += 1
-                continue
-            url = work_queue.get()
-            # This try block is to catch errors and ensure that task_done is called no matter what
-            try:
-                data = do_work(url)
-                if data is None:
-                    message_queue.put("failed to process {}".format(url))
-                else:
-                    data_queue.put(data)
-            except KeyboardInterrupt:
-                raise
-            finally:
-                work_queue.task_done()
-                                
-    except KeyboardInterrupt as e:
-        print("-------------------KEYBOARD INTERRUPT--------------------------")
-        print("-------------------CHILD--------------------------")
-        pipe.send(KILL)
-        print("sent kill to master")
-    except Exception as e:
-        print("=================================WORKER========================================")
-        print(e)
-    finally:
+        connection = urllib.urlopen(urlobj.url.geturl())
+    except IOError:
         return None
-        
+    soup = BeautifulSoup(connection.read())
+    data['links'] = get_links(soup)
+    data['words'] = get_text(soup)
+    data['url'] = urlobj.url.geturl()
+    del soup
+    return data
+
+class Worker(Process):
+
+    def __init__(self, work_queue, data_queue, done_urls, pipe, *args, **kwargs):
+        super(Worker, self).__init__(*args, **kwargs)
+        self.work_queue = work_queue
+        self.data_queue = data_queue
+        self.pipe = pipe
+
+    def run(self):
+        while True:
+            try:
+                got_from_work_queue = 0
+                if self.pipe.poll():
+                    message = self.pipe.receive
+                    if message == STOP:
+                        print("quitting")
+                        self.work_queue.close()
+                        self.data_queue.close()
+                        return
+
+                url = self.work_queue.get(True, BLOCK_TIME)
+
+                got_from_work_queue = 0
+                data = process_url(url)
+                if data:
+                    self.data_queue.put(data, BLOCK_TIME)
+            # It is ugly to catch such a broad swathe of exceptions
+            # but the show must go on.
+            except Full:
+                if got_from_work_queue:
+                    try:
+                        self.work_queue.put_nowait(url)
+                    except:
+                        pass
+                continue
+            except Exception as e:
+                print("Exception", e)
+                continue
+            finally:
+                # call task_done no matter what so that master can join on work_queue
+                # if we don't make sure that this gets called, then work_queue.join()
+                # will block indefinitely
+                if got_from_work_queue:
+                    self.work_queue.task_done()
+      
 class LockDict(dict):
 
     def __init__(self, *args, **kwargs):
@@ -199,13 +196,12 @@ class MasterOfPuppets(object):
         self.work_queue = JoinableQueue(QUEUE_MAXSIZE)
         self.data_queue = JoinableQueue(QUEUE_MAXSIZE)
         self.done = LockDict()
-        self.message_queue = JoinableQueue(QUEUE_MAXSIZE)
 
     def insert_into_db(self, data):
         pass
 
     def stop_all_processes(self):
-        for p, pipe in self.crawlers:
+        for process, pipe in self.children:
             pipe.send(STOP)
         
     def run(self, seed):
@@ -213,27 +209,15 @@ class MasterOfPuppets(object):
             seed_url = URLAttrs(seed)
             self.work_queue.put(seed_url.url.geturl())
             
-            self.crawlers = []
+            self.children = []
             for _ in xrange(MAX_PROCESSES):
-                master_pipe, slave_pipe = Pipe()
-                p = Process(target=worker,
-                            args=(self.work_queue, self.data_queue,
-                                  self.done, slave_pipe, self.message_queue))
-                p.start()
-                self.crawlers.append((p, master_pipe))
-
+                master_pipe, child_pipe = Pipe()
+                child = Worker(self.work_queue, self.data_queue,
+                                 self.done, child_pipe)
+                child.start()
+                self.children.append((child, master_pipe))
 
             while True:
-
-                # check for messages from puppets
-                for p, pipe in self.crawlers:
-                    if pipe.poll():
-                        message = pipe.recv()
-                        print("Received message from child ", message)
-                        if message == KILL:
-                            raise KeyboardInterrupt
-                
-                
                 ### since this class is the only thing that can add to the queue,
                 ### it is safe to kill all processess if queue is empty,
                 ### but first must block until all tasks on work queue are processed
@@ -241,10 +225,10 @@ class MasterOfPuppets(object):
                 if self.work_queue.empty() and self.data_queue.empty():
                     self.work_queue.join()
                     if self.data_queue.empty():
-                        for p, pipe in self.crawlers:
+                        for child, pipe in self.children:
                             pipe.send(STOP)
-                        for p, pipe in self.crawlers:
-                            p.join()
+                        for child, pipe in self.children:
+                            child.join()
                         break
 
                 if not self.data_queue.empty():
@@ -261,31 +245,18 @@ class MasterOfPuppets(object):
                             # print(urlobj.url.geturl())
 
                     self.done[data['url']] = True
-           
-
-                
-
-            self.message_queue.put("all done")
-
-            while not self.message_queue.empty():
-                print(self.message_queue.get())
-            
-                    
+ 
         except KeyboardInterrupt as e:
             print("-------------------KEYBOARD INTERRUPT--------------------------")
             print("-------------------MASTER--------------------------")
-
-            for p, pipe in self.crawlers:
-                print(p.pid)
+            self.work_queue.close()
+            self.data_queue.close()
+            
+            for child, pipe in self.children:
                 pipe.send(STOP)
 
-            for p, pipe in self.crawlers:
-                p.join()
-                print(p.exitcode)
-            ## wtf?  proc need to explicitly return out of a caught exception?
-            ## find out why
-            print("returning")
-            return
+            for child, pipe in self.children:
+                child.join()
 
 if __name__ == '__main__':
     m = MasterOfPuppets()

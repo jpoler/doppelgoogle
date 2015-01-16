@@ -4,7 +4,7 @@ import db.models as models
 from collections import defaultdict
 from urlparse import urlparse
 from multiprocessing import Process, JoinableQueue, Lock, Pipe
-from Queue import Full
+from Queue import Empty, Full
 import time
 import urllib
 from bs4 import BeautifulSoup
@@ -138,7 +138,7 @@ class Worker(Process):
     def run(self):
         while True:
             try:
-                got_from_work_queue = 0
+                got_from_work_queue = False
                 if self.pipe.poll():
                     message = self.pipe.receive
                     if message == STOP:
@@ -147,23 +147,28 @@ class Worker(Process):
                         self.data_queue.close()
                         return
 
-                url = self.work_queue.get(True, BLOCK_TIME)
-
-                got_from_work_queue = 0
+                # url = self.work_queue.get(True, BLOCK_TIME)
+                url = self.work_queue.get()
+                print("url: ", url)
+                got_from_work_queue = True
                 data = process_url(url)
+                print("data: ", data)
                 if data:
-                    self.data_queue.put(data, BLOCK_TIME)
+                    self.data_queue.put(data)
+                    # self.data_queue.put(data, BLOCK_TIME)
             # It is ugly to catch such a broad swathe of exceptions
             # but the show must go on.
+            except Empty:
+                continue
             except Full:
-                if got_from_work_queue:
-                    try:
-                        self.work_queue.put_nowait(url)
-                    except:
-                        pass
+                try:
+                    self.work_queue.put_nowait(url)
+                except:
+                    pass
                 continue
             except Exception as e:
-                print("Exception", e)
+                traceback.print_exc()
+                exit(1)
                 continue
             finally:
                 # call task_done no matter what so that master can join on work_queue
@@ -223,13 +228,17 @@ class MasterOfPuppets(object):
                 ### but first must block until all tasks on work queue are processed
                 ### in case more data is placed on the data queue, which results in more jobs
                 if self.work_queue.empty() and self.data_queue.empty():
+                    print("work and data queues are empty")
                     self.work_queue.join()
+                    
                     if self.data_queue.empty():
+
                         for child, pipe in self.children:
                             pipe.send(STOP)
                         for child, pipe in self.children:
                             child.join()
                         break
+                    print("not there blocking here")
 
                 if not self.data_queue.empty():
                     data = self.data_queue.get()
@@ -242,21 +251,22 @@ class MasterOfPuppets(object):
                         urlobj = URLAttrs(href)
                         if href not in self.done:
                             self.work_queue.put(urlobj.url.geturl())
-                            # print(urlobj.url.geturl())
+                            print(urlobj.url.geturl())
 
                     self.done[data['url']] = True
+                    db_full = True
  
         except KeyboardInterrupt as e:
             print("-------------------KEYBOARD INTERRUPT--------------------------")
             print("-------------------MASTER--------------------------")
-            self.work_queue.close()
-            self.data_queue.close()
+            # self.work_queue.close()
+            # self.data_queue.close()
             
-            for child, pipe in self.children:
-                pipe.send(STOP)
+            # for child, pipe in self.children:
+            #     pipe.send(STOP)
 
-            for child, pipe in self.children:
-                child.join()
+            # for child, pipe in self.children:
+            #     child.join()
 
 if __name__ == '__main__':
     m = MasterOfPuppets()

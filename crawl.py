@@ -149,26 +149,24 @@ class Worker(Process):
 
                 # url = self.work_queue.get(True, BLOCK_TIME)
                 url = self.work_queue.get()
-                print("url: ", url)
                 got_from_work_queue = True
                 data = process_url(url)
-                print("data: ", data)
+                # print("data: ", data)
                 if data:
                     self.data_queue.put(data)
                     # self.data_queue.put(data, BLOCK_TIME)
             # It is ugly to catch such a broad swathe of exceptions
             # but the show must go on.
-            except Empty:
-                continue
-            except Full:
-                try:
-                    self.work_queue.put_nowait(url)
-                except:
-                    pass
-                continue
+            # except Empty:
+            #     continue
+            # except Full:
+            #     try:
+            #         self.work_queue.put_nowait(url)
+            #     except:
+            #         pass
+            #     continue
             except Exception as e:
                 traceback.print_exc()
-                exit(1)
                 continue
             finally:
                 # call task_done no matter what so that master can join on work_queue
@@ -221,24 +219,27 @@ class MasterOfPuppets(object):
                                  self.done, child_pipe)
                 child.start()
                 self.children.append((child, master_pipe))
-
+            db_full = False
+            url_count = 0
             while True:
+                print(url_count)
                 ### since this class is the only thing that can add to the queue,
                 ### it is safe to kill all processess if queue is empty,
                 ### but first must block until all tasks on work queue are processed
                 ### in case more data is placed on the data queue, which results in more jobs
-                if self.work_queue.empty() and self.data_queue.empty():
+                if (self.work_queue.empty() and self.data_queue.empty()) or db_full:
+                
                     print("work and data queues are empty")
-                    self.work_queue.join()
+                    if not db_full:
+                        self.work_queue.join()
                     
-                    if self.data_queue.empty():
+                    if self.data_queue.empty() or db_full:
 
                         for child, pipe in self.children:
                             pipe.send(STOP)
                         for child, pipe in self.children:
                             child.join()
                         break
-                    print("not there blocking here")
 
                 if not self.data_queue.empty():
                     data = self.data_queue.get()
@@ -251,10 +252,12 @@ class MasterOfPuppets(object):
                         urlobj = URLAttrs(href)
                         if href not in self.done:
                             self.work_queue.put(urlobj.url.geturl())
-                            print(urlobj.url.geturl())
+                            # print(urlobj.url.geturl())
 
                     self.done[data['url']] = True
-                    db_full = True
+                    url_count += 1
+                    if url_count >= 100:
+                        db_full = True
  
         except KeyboardInterrupt as e:
             print("-------------------KEYBOARD INTERRUPT--------------------------")
@@ -270,4 +273,4 @@ class MasterOfPuppets(object):
 
 if __name__ == '__main__':
     m = MasterOfPuppets()
-    m.run("www.google.com")
+    m.run("www.yahoo.com")

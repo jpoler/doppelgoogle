@@ -20,7 +20,87 @@ looks like the main thing that needs to be read is Popen itself (which is portab
 
 I'll document the unix version
 
+os.dup duplicates a file descriptor -- interesting
+
+ok so start in process.py instatiates Popen() from forking.py
+
+__init__
+
+flush stderr and stdout
+calls fork
+if child
+   calls processobj._bootstrap()
+   	 this calls self.run()!
+
+poll
+calls waitpid(self.pid, 0 or os.WNOHANG)
+waits for a process to die
+      determines if it was signaled or called exit system call
+
+wait
+calls poll repeatedly until timeout is up
+returns status message from poll if successful, None if not
+
+terminate
+calls os.kill and if error waits for process to die
+
+so now i know how a process is started. But what about signal catching?
+
+
+
 
 
 dont forget to read _exit_function from util.py!
+
+util names an exit function
+in Process._bootstrap(), the finalization_registry is cleared, but then
+
+            try:
+                self.run()
+                exitcode = 0
+            finally:
+                util._exit_function()
+
+gets called, where util._exit_function() looks like this:
+
+def _exit_function(info=info, debug=debug, _run_finalizers=_run_finalizers,
+                   active_children=active_children,
+                   current_process=current_process):
+    # NB: we hold on to references to functions in the arglist due to the
+    # situation described below, where this function is called after this
+    # module's globals are destroyed.
+
+    global _exiting
+
+    info('process shutting down')
+    debug('running all "atexit" finalizers with priority >= 0')
+    _run_finalizers(0)
+
+    if current_process() is not None:
+        # NB: we check if the current process is None here because if
+        # it's None, any call to ``active_children()`` will throw an
+        # AttributeError (active_children winds up trying to get
+        # attributes from util._current_process).  This happens in a
+        # variety of shutdown circumstances that are not well-understood
+        # because module-scope variables are not apparently supposed to
+        # be destroyed until after this function is called.  However,
+        # they are indeed destroyed before this function is called.  See
+        # issues 9775 and 15881.  Also related: 4106, 9205, and 9207.
+
+        for p in active_children():
+            if p._daemonic:
+                info('calling terminate() for daemon %s', p.name)
+                p._popen.terminate()
+
+        for p in active_children():
+            info('calling join() for process %s', p.name)
+            p.join()
+
+    debug('running the remaining "atexit" finalizers')
+    _run_finalizers()
+
+
+so basically no matter what we are going to block on child processes that havent died because
+of the calls to p.join()
+
 

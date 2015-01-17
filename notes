@@ -52,3 +52,33 @@ at first, we will naively ignore subdomains
 # https://docs.python.org/2/library/signal.html
 
 # atexit
+
+
+The problem is almost certainly a deadly-embrace!!
+
+CHILD-1
+obtain lock by calling put(data) on data_queue
+
+MASTER
+block waiting for get() on data_queue
+
+CHILD-2
+CHILD-3
+CHILD-4
+
+dont forget strace
+
+2 questions to answer
+
+-- when a parent process is stopped, are its children also stopped?
+   even more specifically, if a child is blocking, and a parent recieves a SIGTERM,
+   will the child be awoken before the signal is handled by the parent?
+
+   it is clear that _exit_function() is called in bootstrap() which blocks on child.join()
+
+that leads to question 2
+-- what are the children blocking on? at this point im almost certain that they are blocking within
+   the networking code, not on a shared queue
+
+   to answer this question, find a way to trace the line of execution within the child processes,
+   or at least figure out how to get a stack trace at the the time of interrupt

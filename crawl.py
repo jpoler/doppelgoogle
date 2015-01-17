@@ -3,7 +3,7 @@
 import os
 import sys
 import db.models as models
-from collections import defaultdict
+from collections import deque
 from urlparse import urlparse
 from multiprocessing import Process, JoinableQueue, Lock, Pipe, active_children
 from Queue import Empty, Full
@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 import traceback
 from logger import prepare_log_dir, Logger, LOG_DIR
 import signal
+
 
 if sys.version < 3:
     range = xrange
@@ -114,7 +115,6 @@ def splitport(host):
     return (host, None)
 
 # most of this logic is borrowed
-
 # probably need to remove anything after the '#'
 class URLAttrs(object):
     def __init__(self, url):
@@ -154,18 +154,14 @@ class Worker(Process):
         self.data_queue = data_queue
         self.pipe = pipe
         self.log = Logger(LOG_DIR)
-
-    def handle(self, sig, fem):
-        self.log.write_log(pid)
-        self.log.write_log(sig)
-        
+        self.deque = deque()
 
     def run(self):
+
         while True:
             try:
-                got_from_work_queue = False
                 if self.pipe.poll():
-                    message = self.pipe.receive
+                    message = self.pipe.recv()
                     if message == STOP:
                         self.log.write_log("quitting")
                         self.work_queue.close()
@@ -173,32 +169,37 @@ class Worker(Process):
                         return
 
                 # url = self.work_queue.get(True, BLOCK_TIME)
-                
-                url = self.work_queue.get()
-                got_from_work_queue = True
+                while self.deque:
+                    try:
+                        d = self.deque.pop()
+                        self.data_queue.put_nowait(d)
+                        self.work_queue.task_done()
+                        print("did this work?")
+                    except Full:
+                        print("no dude")
+                        self.deque.append(d)
+                        break
+                    except Exception as e:
+                        print(e)
+
+
+                try:
+                    url = self.work_queue.get_nowait()
+                    print(url)
+                except Empty:
+
+                    continue
                 data = process_url(url)
                 if data:
-                    self.data_queue.put(data)
-                    # self.data_queue.put(data, BLOCK_TIME)
-            # It is ugly to catch such a broad swathe of exceptions
-            # but the show must go on.
-            # except Empty:
-            #     continue
-            # except Full:
-            #     try:
-            #         self.work_queue.put_nowait(url)
-            #     except:
-            #         pass
-            #     continue
+                    self.deque.append(data)
+                    print("putting data on deque")
+                else:
+                    self.work_queue.task_done()
+
             except Exception as e:
                 traceback.print_exc()
                 continue
-            finally:
-                # call task_done no matter what so that master can join on work_queue
-                # if we don't make sure that this gets called, then work_queue.join()
-                # will block indefinitely
-                if got_from_work_queue:
-                    self.work_queue.task_done()
+
       
 class LockDict(dict):
 
@@ -246,21 +247,21 @@ class MasterOfPuppets(object):
                                  self.done, child_pipe)
                 child.start()
                 self.children.append((child, master_pipe))
-            db_full = False
-            url_count = 0
+
+            print(self.children)
             while True:
                 ### since this class is the only thing that can add to the queue,
                 ### it is safe to kill all processess if queue is empty,
                 ### but first must block until all tasks on work queue are processed
                 ### in case more data is placed on the data queue, which results in more jobs
-                if (self.work_queue.empty() and self.data_queue.empty()) or db_full:
-                
-                    self.log.write_log("work and data queues are empty")
-                    if not db_full:
-                        self.work_queue.join()
-                    
-                    if self.data_queue.empty() or db_full:
 
+                if (self.work_queue.empty() and self.data_queue.empty()):
+                    print("before work_queue.join")
+                    self.work_queue.join()
+                    print("after work_queue.join")
+                    print(self.data_queue.qsize())
+                    if self.data_queue.qsize() == 0:
+                        print("craaaaaaap")
                         for child, pipe in self.children:
                             pipe.send(STOP)
                         for child, pipe in self.children:
@@ -268,7 +269,10 @@ class MasterOfPuppets(object):
                         break
 
                 if not self.data_queue.empty():
-                    data = self.data_queue.get()
+                    try:
+                        data = self.data_queue.get_nowait()
+                    except Empty:
+                        continue
 
                     # if database insertion fails, we want to say that we did it anyway,
                     # because reprocessing the data is a waste because it will probably fail again
@@ -278,26 +282,35 @@ class MasterOfPuppets(object):
                         urlobj = URLAttrs(href)
                         if href not in self.done:
                             self.work_queue.put(urlobj.url.geturl())
-                            # print(urlobj.url.geturl())
+                            self.log.write_log(urlobj.url.geturl())
 
                     self.done[data['url']] = True
-                    url_count += 1
-                    if url_count >= 100:
-                        db_full = True
  
         except KeyboardInterrupt as e:
             self.log.write_log("-------------------KEYBOARD INTERRUPT--------------------------")
             self.log.write_log("-------------------MASTER--------------------------")
+            # self.work_queue.close()
+            # self.data_queue.close()
             print("Killing babies ", os.getpid())
             for child in active_children():
                 print("killing {}".format(child.pid))
-                os.kill(child.pid, signal.SIGTERM)
+                res = os.kill(child.pid, signal.SIGKILL)
+                print("result of kill", res)
 
+
+            # this lets us skip the call to _exit_function where we block on children
+            print("stupid idea")
+            # os.kill(os.getpid(), signal.SIGKILL)
+
+            time.sleep(10)
+            for child in active_children():
+
+                print("Cockroach: {}".format(child.pid))
+                print("but is it really?", os.path.exists(os.path.join("/proc", str(child.pid))))
             print("done")
         finally:
             print("Finally block")
 
-        return 1414
             
             # self.work_queue.close()
             # self.data_queue.close()
@@ -310,6 +323,6 @@ class MasterOfPuppets(object):
 
 if __name__ == '__main__':
     m = MasterOfPuppets()
-    m.run("www.yahoo.com")
+    m.run("www.google.com")
     print("__main__ block")
     exit(29)

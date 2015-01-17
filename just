@@ -1,3 +1,5 @@
+LOGDIR=/tmp/crawl
+
 default: crawl
 
 start:
@@ -14,3 +16,9 @@ crawl:
 z:
 	@echo 'Zombie processes:'
 	@echo `ps -A | grep python`
+
+log:
+	cat $(LOGDIR)/* | sort
+
+tlog:
+	python logger.py

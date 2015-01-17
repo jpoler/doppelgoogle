@@ -2,6 +2,7 @@ import os
 import sys
 import datetime
 from multiprocessing import Process
+import time
 
 if sys.version < 3:
     range = xrange
@@ -48,18 +49,21 @@ class Logger:
             self.file = open(self.filepath, "w")
 
     def write_log(self, message):
-        with self.file as f:
-            f.write("{}\t{}\t{}".format(
+        try:
+            self.file.write("{}\t{}\t{}\n".format(
                 datetime.datetime.now().strftime("%H%M%S%f"),
                 os.getpid(),
                 message
             ))
+        except IOError as e:
+            print("Failure to write to log, pid: {}".format(os.getpid()))
 
 
 def test_logger():
+    time.sleep(1)
     log = Logger(LOG_DIR)
-    for i in range(100):
-        log.write_log("Hooray for concurrency!")
+    for i in range(10):
+        log.write_log("BOOP")
 
 if __name__ == "__main__":
     prepare_log_dir(LOG_DIR)
@@ -67,8 +71,10 @@ if __name__ == "__main__":
     for child in children:
         child.start()
 
+    parent_log = Logger(LOG_DIR)
+
     for i in range(50):
-        print("Parent message")
+        parent_log.write_log("BEEP")
 
     for child in children:
         child.join()

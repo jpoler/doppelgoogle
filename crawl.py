@@ -1,16 +1,33 @@
 # -*- coding: utf-8 -*-
 
+import os
+import sys
 import db.models as models
 from collections import defaultdict
 from urlparse import urlparse
-from multiprocessing import Process, JoinableQueue, Lock, Pipe
+from multiprocessing import Process, JoinableQueue, Lock, Pipe, active_children
 from Queue import Empty, Full
 import time
 import urllib
 from bs4 import BeautifulSoup
 import traceback
+from logger import prepare_log_dir, Logger, LOG_DIR
+import signal
 
-WHITESPACE = ['\n', '\t', ' ']
+if sys.version < 3:
+    range = xrange
+
+import atexit
+
+# @atexit.register
+# def die():
+#     print("Recieved an interrupt")
+
+#     for child in active_children():
+#         os.kill(child.pid, signal.SIGTERM)
+
+
+WHITESPACE = set(['\n', '\t', ' '])
 HTTP_SCHEME = "http://"
 HTTPS_SCHEME = "https://"
 TEST_SITE = "http://www.wikipedia.org"
@@ -26,6 +43,8 @@ QUEUE_MAXSIZE = 1024
 # constants for message passing
 STOP = 1
 KILL = 2
+
+LOG_DIR = os.path.join("/tmp", "crawl")
 
 def word_generator(s):
     whitespace_handled = False
@@ -134,6 +153,12 @@ class Worker(Process):
         self.work_queue = work_queue
         self.data_queue = data_queue
         self.pipe = pipe
+        self.log = Logger(LOG_DIR)
+
+    def handle(self, sig, fem):
+        self.log.write_log(pid)
+        self.log.write_log(sig)
+        
 
     def run(self):
         while True:
@@ -142,16 +167,16 @@ class Worker(Process):
                 if self.pipe.poll():
                     message = self.pipe.receive
                     if message == STOP:
-                        print("quitting")
+                        self.log.write_log("quitting")
                         self.work_queue.close()
                         self.data_queue.close()
                         return
 
                 # url = self.work_queue.get(True, BLOCK_TIME)
+                
                 url = self.work_queue.get()
                 got_from_work_queue = True
                 data = process_url(url)
-                # print("data: ", data)
                 if data:
                     self.data_queue.put(data)
                     # self.data_queue.put(data, BLOCK_TIME)
@@ -199,6 +224,8 @@ class MasterOfPuppets(object):
         self.work_queue = JoinableQueue(QUEUE_MAXSIZE)
         self.data_queue = JoinableQueue(QUEUE_MAXSIZE)
         self.done = LockDict()
+        prepare_log_dir(LOG_DIR)
+        self.log = Logger(LOG_DIR)
 
     def insert_into_db(self, data):
         pass
@@ -213,7 +240,7 @@ class MasterOfPuppets(object):
             self.work_queue.put(seed_url.url.geturl())
             
             self.children = []
-            for _ in xrange(MAX_PROCESSES):
+            for _ in range(MAX_PROCESSES):
                 master_pipe, child_pipe = Pipe()
                 child = Worker(self.work_queue, self.data_queue,
                                  self.done, child_pipe)
@@ -222,14 +249,13 @@ class MasterOfPuppets(object):
             db_full = False
             url_count = 0
             while True:
-                print(url_count)
                 ### since this class is the only thing that can add to the queue,
                 ### it is safe to kill all processess if queue is empty,
                 ### but first must block until all tasks on work queue are processed
                 ### in case more data is placed on the data queue, which results in more jobs
                 if (self.work_queue.empty() and self.data_queue.empty()) or db_full:
                 
-                    print("work and data queues are empty")
+                    self.log.write_log("work and data queues are empty")
                     if not db_full:
                         self.work_queue.join()
                     
@@ -260,8 +286,19 @@ class MasterOfPuppets(object):
                         db_full = True
  
         except KeyboardInterrupt as e:
-            print("-------------------KEYBOARD INTERRUPT--------------------------")
-            print("-------------------MASTER--------------------------")
+            self.log.write_log("-------------------KEYBOARD INTERRUPT--------------------------")
+            self.log.write_log("-------------------MASTER--------------------------")
+            print("Killing babies ", os.getpid())
+            for child in active_children():
+                print("killing {}".format(child.pid))
+                os.kill(child.pid, signal.SIGTERM)
+
+            print("done")
+        finally:
+            print("Finally block")
+
+        return 1414
+            
             # self.work_queue.close()
             # self.data_queue.close()
             
@@ -274,3 +311,5 @@ class MasterOfPuppets(object):
 if __name__ == '__main__':
     m = MasterOfPuppets()
     m.run("www.yahoo.com")
+    print("__main__ block")
+    exit(29)

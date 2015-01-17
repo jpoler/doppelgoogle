@@ -1,0 +1,26 @@
+it looks like in my multiprocessing tracebacks that Popen is being imported from forking.py
+
+start basically calls Popen
+
+join calls Popen.wait
+
+bootstrap doesn't appear to be called within process.py itself
+
+bootstrap does:
+	  sets up basic attributes like _current process = self
+	  closes stdin and makes it dev/null instead
+	  calls self.run!!!
+	  catches SystemExit calls -- read about this exception
+	  handles all exits from process
+	  
+
+forking.py
+
+looks like the main thing that needs to be read is Popen itself (which is portable for unix and windows)
+
+I'll document the unix version
+
+
+
+dont forget to read _exit_function from util.py!
+

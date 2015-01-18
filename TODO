@@ -1,0 +1,49 @@
+This will hopefully help to break this project up into little atomic tasks
+
+debugging:
+[ ] figure out what the child processes are blocking on during SIGTERM to master
+    this might be as simple as logging before and after every urlopen call
+    try a dir(child_process) to see if there is a way to access stack frame
+[ ] figure out a way to quit nicely always!
+
+
+packaging:
+[X] package structure defined
+[ ] seperate project into logical modules
+[ ] make a readme for installation
+
+crawler:
+[X] functions to parse urls
+[X] functions to process website text
+[X] functions to process website links
+[X] worker (child) class to take urls off of work_queue, process, and put on data_queue
+[X] master class to take data off of data_queue, and add urls to work queue
+[X] master creates child processes
+[ ] child quits nicely when a certain data threshold has been reached
+[ ] master quits when a certain data threshold has been reached
+    this implies after children have exited
+
+database:
+[ ] function to get total database size
+[ ] complete data model using neomodel ORM
+[ ] define a function that will insert into database
+[ ] look in to possibly quitting nicely on interrupt so that
+    transactions are finished, db locks are removed first
+
+flask app:
+[ ] install dependancies (jinja and werkzeug)
+[ ] template that will display a form for a search input
+[ ] home page controller (GET)
+[ ] search controller (POST) from home page? or redirect to same controller for all searches?
+[ ] search results template
+[ ] search results controller -- is this a redirect?
+
+search-engine logic: this will be a seperate module imported by flask app
+[ ] start by doing a dumb search just to get the flask app up and running
+[ ] next do some simple digest of words and their proximity in document
+[ ] include the attribute text in links as part of criteria
+[ ] finally implement page range
+[ ] the result will use page body word frequency, link attrs, and page rank in combination
+
+
+	

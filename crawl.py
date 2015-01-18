@@ -28,18 +28,18 @@ import atexit
 #         os.kill(child.pid, signal.SIGTERM)
 
 
-WHITESPACE = set(['\n', '\t', ' '])
+WHITESPACE = set(["\n", "\t", " "])
 HTTP_SCHEME = "http://"
 HTTPS_SCHEME = "https://"
 TEST_SITE = "http://www.wikipedia.org"
-UNWANTED_TAGS = set(['script', 'style'])
-LINKS = ['a']
-WANTED_LANGS = set(['en'])
-UNWANTED_WORDS = set(['the', 'of', 'to', 'and', 'a', 'in', 'is', 'it'])
+UNWANTED_TAGS = set(["script", "style"])
+LINKS = ["a"]
+WANTED_LANGS = set(["en"])
+UNWANTED_WORDS = set(["the", "of", "to", "and", "a", "in", "is", "it"])
 BLOCK_TIME = 1
 
 MAX_PROCESSES = 4
-QUEUE_MAXSIZE = 1024
+QUEUE_MAXSIZE = 2**20
 
 # constants for message passing
 STOP = 1
@@ -68,18 +68,18 @@ def word_generator(s):
 def fix_scheme(url):
     if (url.startswith(HTTP_SCHEME) or url.startswith(HTTPS_SCHEME)):
         return url
-    url = url.lstrip('/')
+    url = url.lstrip("/")
     return HTTP_SCHEME + url
 
 def get_links(soup):
     links = {}
-    for link in soup.find_all('a'):
-        if 'lang' in link.attrs:
-            if link.attrs['lang'] not in WANTED_LANGS:
+    for link in soup.find_all("a"):
+        if "lang" in link.attrs:
+            if link.attrs["lang"] not in WANTED_LANGS:
                 continue
-        if 'href' not in link.attrs:
+        if "href" not in link.attrs:
             continue
-        urlobj = URLAttrs(link['href'])
+        urlobj = URLAttrs(link["href"])
         links[urlobj.url.geturl()] = dict(link.attrs)
     return links
 
@@ -102,7 +102,7 @@ def get_text(soup):
     return digest_text(text_only)
 
 def is_ip_address(s):
-    for i, octet in enumerate(s.split('.')):
+    for i, octet in enumerate(s.split(".")):
         if not octet.isdigit():
             return False
         if not (0 <= int(octet) <= 255):
@@ -110,12 +110,12 @@ def is_ip_address(s):
     return i == 3
 
 def splitport(host):
-    if host.count(':') == 1:
-        return host.rsplit(':', 1)
+    if host.count(":") == 1:
+        return host.rsplit(":", 1)
     return (host, None)
 
 # most of this logic is borrowed
-# probably need to remove anything after the '#'
+# probably need to remove anything after the "#"
 class URLAttrs(object):
     def __init__(self, url):
         self.parse_url(url)
@@ -126,11 +126,11 @@ class URLAttrs(object):
         (self.scheme, self.netloc, self.path,
          self.params, self.query, self.fragment) = self.url
         self.host, self.port = splitport(self.netloc)
-        if '.' in self.host and not is_ip_address(self.host):
-            self.domain, self.tld  = self.host.rsplit('.', 1)
+        if "." in self.host and not is_ip_address(self.host):
+            self.domain, self.tld  = self.host.rsplit(".", 1)
         else:
             self.domain = self.host
-            self.tld = ''
+            self.tld = ""
 
 def process_url(url):
     data = {}
@@ -139,10 +139,12 @@ def process_url(url):
         connection = urllib.urlopen(urlobj.url.geturl())
     except IOError:
         return None
+    if connection.headers["content-type"].find("text/html") == -1:
+        return None
     soup = BeautifulSoup(connection.read())
-    data['links'] = get_links(soup)
-    data['words'] = get_text(soup)
-    data['url'] = urlobj.url.geturl()
+    data["links"] = get_links(soup)
+    data["words"] = get_text(soup)
+    data["url"] = urlobj.url.geturl()
     del soup
     return data
 
@@ -174,9 +176,7 @@ class Worker(Process):
                         d = self.deque.pop()
                         self.data_queue.put_nowait(d)
                         self.work_queue.task_done()
-                        print("did this work?")
                     except Full:
-                        print("no dude")
                         self.deque.append(d)
                         break
                     except Exception as e:
@@ -185,14 +185,12 @@ class Worker(Process):
 
                 try:
                     url = self.work_queue.get_nowait()
-                    print(url)
                 except Empty:
 
                     continue
                 data = process_url(url)
                 if data:
                     self.deque.append(data)
-                    print("putting data on deque")
                 else:
                     self.work_queue.task_done()
 
@@ -227,6 +225,7 @@ class MasterOfPuppets(object):
         self.done = LockDict()
         prepare_log_dir(LOG_DIR)
         self.log = Logger(LOG_DIR)
+        self.links = deque()
 
     def insert_into_db(self, data):
         pass
@@ -234,7 +233,14 @@ class MasterOfPuppets(object):
     def stop_all_processes(self):
         for process, pipe in self.children:
             pipe.send(STOP)
-        
+
+    def violently_destroy_innocent_processes_and_then_self(self):
+        for child in active_children():
+            os.kill(child.pid, signal.SIGKILL)
+
+        # this lets us skip the call to _exit_function where we block on children
+        os.kill(os.getpid(), signal.SIGKILL)
+
     def run(self, seed):
         try:
             seed_url = URLAttrs(seed)
@@ -248,20 +254,20 @@ class MasterOfPuppets(object):
                 child.start()
                 self.children.append((child, master_pipe))
 
-            print(self.children)
+            successful_links = 0
+            iterations = -1
             while True:
+                iterations += 1
+                # if iterations % 10000 == 0:
+                #     print("Iterations: {}, successful_links: {}".format(iterations, successful_links))
                 ### since this class is the only thing that can add to the queue,
                 ### it is safe to kill all processess if queue is empty,
                 ### but first must block until all tasks on work queue are processed
                 ### in case more data is placed on the data queue, which results in more jobs
 
                 if (self.work_queue.empty() and self.data_queue.empty()):
-                    print("before work_queue.join")
                     self.work_queue.join()
-                    print("after work_queue.join")
-                    print(self.data_queue.qsize())
                     if self.data_queue.qsize() == 0:
-                        print("craaaaaaap")
                         for child, pipe in self.children:
                             pipe.send(STOP)
                         for child, pipe in self.children:
@@ -273,56 +279,39 @@ class MasterOfPuppets(object):
                         data = self.data_queue.get_nowait()
                     except Empty:
                         continue
+                    successful_links += 1
+                    
+                    self.links.append(data["links"])
+                    self.insert_into_db(data)
+                    self.done[data["url"]] = True
 
                     # if database insertion fails, we want to say that we did it anyway,
                     # because reprocessing the data is a waste because it will probably fail again
 
+                    # Ratio ends up being really lopsided and queue size gets huge while not many links
+                    # are processed. Fixing the problem by enforcing a 2:1 ratio of work_queue to data in the database
+                    if (self.work_queue.qsize() // successful_links) < 2:
+                        links = self.links.pop()
+                        for href in links:
+                            print("qsize {}, urls_done: {}, urls_deferred {}" \
+                                  "data_queue: {}".format(
+                                      self.work_queue.qsize(), successful_links, len(self.links),
+                                      self.data_queue.qsize()))
+                            print("work_queue_memsize: {} bytes, done_memsize: {} bytes, urls_deferred_memsize: {} bytes" \
+                                  "data_queue_memsize: {} bytes".format(
+                                      sys.getsizeof(self.work_queue), sys.getsizeof(self.done),
+                                      sys.getsizeof(self.links), sys.getsizeof(self.data_queue)))
+                            if href not in self.done:
+                                urlobj = URLAttrs(href)
+                                self.work_queue.put(urlobj.url.geturl())
 
-                    for href in data['links']:
-                        urlobj = URLAttrs(href)
-                        if href not in self.done:
-                            self.work_queue.put(urlobj.url.geturl())
-                            self.log.write_log(urlobj.url.geturl())
+                        
 
-                    self.done[data['url']] = True
- 
         except KeyboardInterrupt as e:
-            self.log.write_log("-------------------KEYBOARD INTERRUPT--------------------------")
-            self.log.write_log("-------------------MASTER--------------------------")
-            # self.work_queue.close()
-            # self.data_queue.close()
-            print("Killing babies ", os.getpid())
-            for child in active_children():
-                print("killing {}".format(child.pid))
-                res = os.kill(child.pid, signal.SIGKILL)
-                print("result of kill", res)
+            self.violently_destroy_innocent_processes_and_then_self()
 
-
-            # this lets us skip the call to _exit_function where we block on children
-            print("stupid idea")
-            # os.kill(os.getpid(), signal.SIGKILL)
-
-            time.sleep(10)
-            for child in active_children():
-
-                print("Cockroach: {}".format(child.pid))
-                print("but is it really?", os.path.exists(os.path.join("/proc", str(child.pid))))
-            print("done")
-        finally:
-            print("Finally block")
-
-            
-            # self.work_queue.close()
-            # self.data_queue.close()
-            
-            # for child, pipe in self.children:
-            #     pipe.send(STOP)
-
-            # for child, pipe in self.children:
-            #     child.join()
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     m = MasterOfPuppets()
     m.run("www.google.com")
-    print("__main__ block")
-    exit(29)
+
+

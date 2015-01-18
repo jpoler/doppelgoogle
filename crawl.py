@@ -132,21 +132,6 @@ class URLAttrs(object):
             self.domain = self.host
             self.tld = ""
 
-def process_url(url):
-    data = {}
-    urlobj = URLAttrs(url)
-    try:
-        connection = urllib.urlopen(urlobj.url.geturl())
-    except IOError:
-        return None
-    if connection.headers["content-type"].find("text/html") == -1:
-        return None
-    soup = BeautifulSoup(connection.read())
-    data["links"] = get_links(soup)
-    data["words"] = get_text(soup)
-    data["url"] = urlobj.url.geturl()
-    del soup
-    return data
 
 class Worker(Process):
 
@@ -157,6 +142,27 @@ class Worker(Process):
         self.pipe = pipe
         self.log = Logger(LOG_DIR)
         self.deque = deque()
+
+    def process_url(self, url):
+        data = {}
+        urlobj = URLAttrs(url)
+        try:
+            self.log.write_log("opening {}".format(url))
+            connection = urllib.urlopen(urlobj.url.geturl())
+        except IOError:
+            return None
+
+        finally:
+            self.log.write_log("done with {}".format(url))
+        if connection.headers["content-type"].find("text/html") == -1:
+            return None
+        soup = BeautifulSoup(connection.read())
+        data["links"] = get_links(soup)
+        data["words"] = get_text(soup)
+        data["url"] = urlobj.url.geturl()
+        del soup
+        return data
+
 
     def run(self):
 
@@ -188,7 +194,7 @@ class Worker(Process):
                 except Empty:
 
                     continue
-                data = process_url(url)
+                data = self.process_url(url)
                 if data:
                     self.deque.append(data)
                 else:
@@ -242,73 +248,69 @@ class MasterOfPuppets(object):
         os.kill(os.getpid(), signal.SIGKILL)
 
     def run(self, seed):
-        try:
-            seed_url = URLAttrs(seed)
-            self.work_queue.put(seed_url.url.geturl())
-            
-            self.children = []
-            for _ in range(MAX_PROCESSES):
-                master_pipe, child_pipe = Pipe()
-                child = Worker(self.work_queue, self.data_queue,
-                                 self.done, child_pipe)
-                child.start()
-                self.children.append((child, master_pipe))
+        seed_url = URLAttrs(seed)
+        self.work_queue.put(seed_url.url.geturl())
 
-            successful_links = 0
-            iterations = -1
-            while True:
-                iterations += 1
-                # if iterations % 10000 == 0:
-                #     print("Iterations: {}, successful_links: {}".format(iterations, successful_links))
-                ### since this class is the only thing that can add to the queue,
-                ### it is safe to kill all processess if queue is empty,
-                ### but first must block until all tasks on work queue are processed
-                ### in case more data is placed on the data queue, which results in more jobs
+        self.children = []
+        for _ in range(MAX_PROCESSES):
+            master_pipe, child_pipe = Pipe()
+            child = Worker(self.work_queue, self.data_queue,
+                             self.done, child_pipe)
+            child.start()
+            self.children.append((child, master_pipe))
 
-                if (self.work_queue.empty() and self.data_queue.empty()):
-                    self.work_queue.join()
-                    if self.data_queue.qsize() == 0:
-                        for child, pipe in self.children:
-                            pipe.send(STOP)
-                        for child, pipe in self.children:
-                            child.join()
-                        break
+        successful_links = 0
+        iterations = -1
+        while True:
+            iterations += 1
+            # if iterations % 10000 == 0:
+            #     print("Iterations: {}, successful_links: {}".format(iterations, successful_links))
+            ### since this class is the only thing that can add to the queue,
+            ### it is safe to kill all processess if queue is empty,
+            ### but first must block until all tasks on work queue are processed
+            ### in case more data is placed on the data queue, which results in more jobs
 
-                if not self.data_queue.empty():
-                    try:
-                        data = self.data_queue.get_nowait()
-                    except Empty:
-                        continue
-                    successful_links += 1
-                    
-                    self.links.append(data["links"])
-                    self.insert_into_db(data)
-                    self.done[data["url"]] = True
+            if (self.work_queue.empty() and self.data_queue.empty()):
+                self.work_queue.join()
+                if self.data_queue.qsize() == 0:
+                    for child, pipe in self.children:
+                        pipe.send(STOP)
+                    for child, pipe in self.children:
+                        child.join()
+                    break
 
-                    # if database insertion fails, we want to say that we did it anyway,
-                    # because reprocessing the data is a waste because it will probably fail again
+            if not self.data_queue.empty():
+                try:
+                    data = self.data_queue.get_nowait()
+                except Empty:
+                    continue
+                successful_links += 1
 
-                    # Ratio ends up being really lopsided and queue size gets huge while not many links
-                    # are processed. Fixing the problem by enforcing a 2:1 ratio of work_queue to data in the database
-                    if (self.work_queue.qsize() // successful_links) < 2:
-                        links = self.links.pop()
-                        for href in links:
-                            print("qsize {}, urls_done: {}, urls_deferred {}" \
-                                  "data_queue: {}".format(
-                                      self.work_queue.qsize(), successful_links, len(self.links),
-                                      self.data_queue.qsize()))
-                            print("work_queue_memsize: {} bytes, done_memsize: {} bytes, urls_deferred_memsize: {} bytes" \
-                                  "data_queue_memsize: {} bytes".format(
-                                      sys.getsizeof(self.work_queue), sys.getsizeof(self.done),
-                                      sys.getsizeof(self.links), sys.getsizeof(self.data_queue)))
-                            if href not in self.done:
-                                urlobj = URLAttrs(href)
-                                self.work_queue.put(urlobj.url.geturl())
+                self.links.append(data["links"])
+                self.insert_into_db(data)
+                self.done[data["url"]] = True
 
-                        
+                # if database insertion fails, we want to say that we did it anyway,
+                # because reprocessing the data is a waste because it will probably fail again
 
-        except KeyboardInterrupt as e:
-            self.violently_destroy_innocent_processes_and_then_self()
+                # Ratio ends up being really lopsided and queue size gets huge while not many links
+                # are processed. Fixing the problem by enforcing a 2:1 ratio of work_queue to data in the database
+                if (self.work_queue.qsize() // successful_links) < 2:
+                    links = self.links.pop()
+                    for href in links:
+                        # print("qsize {}, urls_done: {}, urls_deferred {}" \
+                        #       "data_queue: {}".format(
+                        #           self.work_queue.qsize(), successful_links, len(self.links),
+                        #           self.data_queue.qsize()))
+                        # print("work_queue_memsize: {} bytes, done_memsize: {} bytes, urls_deferred_memsize: {} bytes" \
+                        #       "data_queue_memsize: {} bytes".format(
+                        #           sys.getsizeof(self.work_queue), sys.getsizeof(self.done),
+                        #           sys.getsizeof(self.links), sys.getsizeof(self.data_queue)))
+                        if href not in self.done:
+                            urlobj = URLAttrs(href)
+                            self.work_queue.put(urlobj.url.geturl())
+
+            # self.violently_destroy_innocent_processes_and_then_self()
 
 if __name__ == "__main__":
     m = MasterOfPuppets()

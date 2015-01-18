@@ -82,3 +82,10 @@ that leads to question 2
 
    to answer this question, find a way to trace the line of execution within the child processes,
    or at least figure out how to get a stack trace at the the time of interrupt
+
+
+things to consider:
+
+should probably parse response headers and take the response value into consideration
+aka only add pages to the queue that are good responses try to figure out how to use the
+headers from urlopen

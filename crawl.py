@@ -15,18 +15,11 @@ from logger import prepare_log_dir, Logger, LOG_DIR
 import signal
 
 
+from doppelgoogle.conf import SETTINGS
+from doppelgoogle.logg
+
 if sys.version < 3:
     range = xrange
-
-import atexit
-
-# @atexit.register
-# def die():
-#     print("Recieved an interrupt")
-
-#     for child in active_children():
-#         os.kill(child.pid, signal.SIGTERM)
-
 
 WHITESPACE = set(["\n", "\t", " "])
 HTTP_SCHEME = "http://"
@@ -147,13 +140,10 @@ class Worker(Process):
         data = {}
         urlobj = URLAttrs(url)
         try:
-            self.log.write_log("opening {}".format(url))
             connection = urllib.urlopen(urlobj.url.geturl())
         except IOError:
             return None
 
-        finally:
-            self.log.write_log("done with {}".format(url))
         if connection.headers["content-type"].find("text/html") == -1:
             return None
         soup = BeautifulSoup(connection.read())
@@ -176,7 +166,7 @@ class Worker(Process):
                         self.data_queue.close()
                         return
 
-                # url = self.work_queue.get(True, BLOCK_TIME)
+
                 while self.deque:
                     try:
                         d = self.deque.pop()

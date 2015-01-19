@@ -9,10 +9,10 @@ debugging:
 
 packaging:
 [X] package structure defined
-[ ] seperate project into logical modules
-[ ] create a main function that will dispatch to either crawl.py or the flask app
+[X] seperate project into logical modules
+[X] create a main function that will dispatch to either crawl.py or the flask app
     using argparse
-[ ] make a readme for installation
+[X] make a readme for installation
 
 crawler:
 [X] functions to parse urls

@@ -1,0 +1,9 @@
+#! bin/bash -x
+
+echo 'installing dependencies'
+pip install -r requirements.txt
+echo 'Adding doppelgoogle to PYTHONPATH'
+projdir=${PWD##*/}
+cd .. && echo `pwd` > $projdir/env/lib/python2.7/site-packages/doppelgoogle.pth
+cd $projdir
+echo 'All done!'

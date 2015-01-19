@@ -30,7 +30,9 @@ or
 ```bash
 python dg.py --server <HOSTNAME> <PORT>
 ```
-If you want even easier, try the following commands using j, a convenience program that uses make to execute arbitrary commands from a makefile. Really useful!
+If you want even easier, try the following commands using j, a convenience program by Casey Rodarmor that uses make to execute arbitrary commands from a makefile. Really useful!
+
+Check it out at https://github.com/casey/j
 
 This defaults to crawling with a seed of www.google.com
 ```bash

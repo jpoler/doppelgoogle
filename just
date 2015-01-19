@@ -22,3 +22,18 @@ log:
 
 tlog:
 	python logger.py
+
+setup:
+	@echo 'Initializing a virtual environment'
+	@virtualenv env
+	@echo 'Activating virtualenv'
+	@bash --init-file env/bin/activate -i
+	@echo 'installing dependancies'
+	@pip install -r requirements.txt
+	@echo 'Adding doppelgoogle to PYTHONPATH'
+	@projdir=${PWD##*/}
+	@cd .. && echo `pwd` > $projdir/env/lib/python2.7/site-packages/doppelgoogle.pth
+	@cd $projdir
+	@echo 'All done!'
+	
+	

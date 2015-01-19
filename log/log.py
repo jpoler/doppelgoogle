@@ -58,6 +58,9 @@ class Logger:
         except IOError as e:
             print("Failure to write to log, pid: {}".format(os.getpid()))
 
+    def flush(self):
+        self.file.flush()
+
 
 def test_logger():
     time.sleep(1)

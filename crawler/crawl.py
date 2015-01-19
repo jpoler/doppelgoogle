@@ -17,6 +17,7 @@ import signal
 import doppelgoogle.db.models as models
 from doppelgoogle.conf.conf import SETTINGS
 from doppelgoogle.log.log import prepare_log_dir, Logger, LOG_DIR
+from doppelgoogle.db.size import database_size
 
 
 if sys.version < 3:
@@ -162,7 +163,9 @@ class Worker(Process):
                 if self.pipe.poll():
                     message = self.pipe.recv()
                     if message == STOP:
+                        print("quitting", self.pid)
                         self.log.write_log("quitting")
+                        self.log.flush()
                         self.work_queue.close()
                         self.data_queue.close()
                         return
@@ -219,36 +222,54 @@ class MasterOfPuppets(object):
     def __init__(self):
         self.work_queue = JoinableQueue(QUEUE_MAXSIZE)
         self.data_queue = JoinableQueue(QUEUE_MAXSIZE)
+        self.pipes = {}
         self.done = LockDict()
         prepare_log_dir(LOG_DIR)
         self.log = Logger(LOG_DIR)
         self.links = deque()
+        # testing hack
+        self.data_threshold = 20000
+        # self.data_threshold = SETTINGS['MAX_DATABASE_SIZE'] - database_size()
+        print(SETTINGS['MAX_DATABASE_SIZE'])
+        print(database_size())
+        if self.data_threshold <= 0:
+            print("Database is already larger than max size")
+            self.log.write_log("Database is already larger than max size")
+            exit(1)
+        self.data_written = 0
+
 
     def insert_into_db(self, data):
         pass
 
-    def stop_all_processes(self):
-        for process, pipe in self.children:
-            pipe.send(STOP)
+    def get_pipe(self, child):
+        try:
+            return self.pipes[child.pid]
+        except KeyError:
+            return None
+            
 
-    def violently_destroy_innocent_processes_and_then_self(self):
+    # may want to store a pipe under pid instead of in my own list, then active_children()
+    # can be used which is certainly safer
+    def nicely_ask_children_to_stop(self):
         for child in active_children():
-            os.kill(child.pid, signal.SIGKILL)
+            pipe = self.get_pipe(child)
+            if pipe:
+                pipe.send(STOP)
 
-        # this lets us skip the call to _exit_function where we block on children
-        os.kill(os.getpid(), signal.SIGKILL)
+        for child in active_children():
+            child.join()
 
     def run(self, seed):
         seed_url = URLAttrs(seed)
         self.work_queue.put(seed_url.url.geturl())
 
-        self.children = []
         for _ in range(MAX_PROCESSES):
             master_pipe, child_pipe = Pipe()
             child = Worker(self.work_queue, self.data_queue,
                              self.done, child_pipe)
             child.start()
-            self.children.append((child, master_pipe))
+            self.pipes[child.pid] = master_pipe
 
         successful_links = 0
         iterations = -1
@@ -260,14 +281,17 @@ class MasterOfPuppets(object):
             ### it is safe to kill all processess if queue is empty,
             ### but first must block until all tasks on work queue are processed
             ### in case more data is placed on the data queue, which results in more jobs
+            print("Data written {}".format(self.data_written))
+            if self.data_written > self.data_threshold:
+#                if database_size() > self.data_threshold:
+                self.nicely_ask_children_to_stop()
+                break
+
 
             if (self.work_queue.empty() and self.data_queue.empty()):
                 self.work_queue.join()
                 if self.data_queue.qsize() == 0:
-                    for child, pipe in self.children:
-                        pipe.send(STOP)
-                    for child, pipe in self.children:
-                        child.join()
+                    self.nicely_ask_children_to_stop()
                     break
 
             if not self.data_queue.empty():
@@ -280,6 +304,7 @@ class MasterOfPuppets(object):
                 self.links.append(data["links"])
                 self.insert_into_db(data)
                 self.done[data["url"]] = True
+                self.data_written += sys.getsizeof(data)
 
                 # if database insertion fails, we want to say that we did it anyway,
                 # because reprocessing the data is a waste because it will probably fail again

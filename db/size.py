@@ -1,6 +1,6 @@
 import os
 
-from doppelgoogle.conf import DATABASE_PATH
+from doppelgoogle.conf.conf import SETTINGS
 
 def directory_size(path):
     total_size = 0
@@ -11,7 +11,7 @@ def directory_size(path):
     return total_size
 
 def database_size():
-    return directory_size(DATABASE_PATH)
+    return directory_size(SETTINGS['DATABASE_PATH'])
 
 
 if __name__ == "__main__":

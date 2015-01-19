@@ -10,9 +10,25 @@ Now in the directory where you want to store this project:
 mkdir <PROJECT_NAME> && cd <PROJECT_NAME>
 git clone git@github.com:jpoler/doppelgoogle.git
 cd doppelgoogle
-virtualenv env
-j start
 ```
-Make sure that your env has been activated, you should see an (env) before your command-line prompt
+I have written a bash script to set up your virtualenv in a folder called env, activate the env, install all python dependencies, and to add the project directory to the PYTHONPATH so that you can import using package syntax.
 
+To run, simply use
+
+```bash
+j setup
+```
+
+Now you should be free to run commands from the doppelgoogle directory, for instance:
+
+```bash
+j crawl
+```
+
+or 
+
+```bash
+j server
+```
+Note: server is not implemented yet!
 

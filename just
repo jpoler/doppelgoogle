@@ -11,17 +11,14 @@ neoup:
 	@echo 'Neo started!'
 
 crawl:
-	python crawl.py
+	@python dg.py --crawl www.google.com
 
 z:
 	@echo 'Zombie processes:'
 	@echo `ps -A | grep python`
 
 log:
-	cat $(LOGDIR)/* | sort
-
-tlog:
-	python logger.py
+	@cat $(LOGDIR)/* | sort
 
 setup:
 	@echo 'Initializing a virtual environment'

@@ -22,3 +22,13 @@ log:
 
 tlog:
 	python logger.py
+
+setup:
+	@echo 'Initializing a virtual environment'
+	@virtualenv env
+	@echo 'Activating virtualenv and installing python dependencies'
+	@cat setup | bash --init-file env/bin/activate -i -s -x
+	@bash --init-file env/bin/activate -i
+
+	
+	

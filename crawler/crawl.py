@@ -2,7 +2,7 @@
 
 import os
 import sys
-import db.models as models
+
 from collections import deque
 from urlparse import urlparse
 from multiprocessing import Process, JoinableQueue, Lock, Pipe, active_children
@@ -11,12 +11,13 @@ import time
 import urllib
 from bs4 import BeautifulSoup
 import traceback
-from logger import prepare_log_dir, Logger, LOG_DIR
+
 import signal
 
+import doppelgoogle.db.models as models
+from doppelgoogle.conf.conf import SETTINGS
+from doppelgoogle.log.log import prepare_log_dir, Logger, LOG_DIR
 
-from doppelgoogle.conf import SETTINGS
-from doppelgoogle.logg
 
 if sys.version < 3:
     range = xrange
@@ -302,8 +303,9 @@ class MasterOfPuppets(object):
 
             # self.violently_destroy_innocent_processes_and_then_self()
 
-if __name__ == "__main__":
+
+def run(seed):
     m = MasterOfPuppets()
-    m.run("www.google.com")
+    m.run(seed)
 
 

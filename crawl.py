@@ -115,34 +115,28 @@ class URLAttrs(object):
             self.tld = ''
 
 def do_work(url):
-    try:
-        data = {}
-        urlobj = URLAttrs(url)
-        url_connection = urllib.urlopen(urlobj.url.geturl())
-        soup = BeautifulSoup(url_connection.read())
-        data['links'] = get_links(soup)
-        data['words'] = get_text(soup)
-        data['url'] = urlobj.url.geturl()
-        del soup
+
+    data = {}
+    urlobj = URLAttrs(url)
+    url_connection = urllib.urlopen(urlobj.url.geturl())
+    soup = BeautifulSoup(url_connection.read())
+    data['links'] = get_links(soup)
+    data['words'] = get_text(soup)
+    data['url'] = urlobj.url.geturl()
+    del soup
+    return data
     # is this block totally necessary?
     # what is being caught here that could not be caught in worker?
     # if do work fails, and we are sure that we mark the task as done on the work_queue
     # it is probably safe to just catch the exception and continue loop
     # maybe place a try except just within the infinite loop of worker
 
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        print("DO_WORK=================================================================DO_WORK")
-        print(e)
-        data = None
-    finally:
-        return data
         
 def worker(work_queue, data_queue, done_urls, pipe, message_queue):
-    try:
-        sleeps = 0
-        while True:
+
+    sleeps = 0
+    while True:
+        try:
             if pipe.poll():
                 message = pipe.recv()
                 print("received message from master ", message)
@@ -157,27 +151,14 @@ def worker(work_queue, data_queue, done_urls, pipe, message_queue):
                 continue
             url = work_queue.get()
             # This try block is to catch errors and ensure that task_done is called no matter what
-            try:
-                data = do_work(url)
-                if data is None:
-                    message_queue.put("failed to process {}".format(url))
-                else:
-                    data_queue.put(data)
-            except KeyboardInterrupt:
-                raise
-            finally:
-                work_queue.task_done()
+            data = do_work(url)
+            data_queue.put(data)
+            work_queue.task_done()
+        except IOError as e:
+            print("caught IOError")
+            continue
+            work_queue.task_done()
                                 
-    except KeyboardInterrupt as e:
-        print("-------------------KEYBOARD INTERRUPT--------------------------")
-        print("-------------------CHILD--------------------------")
-        pipe.send(KILL)
-        print("sent kill to master")
-    except Exception as e:
-        print("=================================WORKER========================================")
-        print(e)
-    finally:
-        return
         
 class LockDict(dict):
 
@@ -213,86 +194,70 @@ class MasterOfPuppets(object):
             pipe.send(STOP)
         
     def run(self, seed):
-        try:
-            seed_url = URLAttrs(seed)
-            self.work_queue.put(seed_url.url.geturl())
-            
-            self.crawlers = []
-            for _ in xrange(MAX_PROCESSES):
-                master_pipe, slave_pipe = Pipe()
-                p = Process(target=worker,
-                            args=(self.work_queue, self.data_queue,
-                                  self.done, slave_pipe, self.message_queue))
-                p.start()
-                self.crawlers.append((p, master_pipe))
-            while True:
+        seed_url = URLAttrs(seed)
+        self.work_queue.put(seed_url.url.geturl())
 
-                # check for messages from puppets
-                for p, pipe in self.crawlers:
-                    if pipe.poll():
-                        message = pipe.recv()
-                        print("Received message from child ", message)
-                        if message == KILL:
-                            raise KeyboardInterrupt
-                
-                
-                ### since this class is the only thing that can add to the queue,
-                ### it is safe to kill all processess if queue is empty,
-                ### but first must block until all tasks on work queue are processed
-                ### in case more data is placed on the data queue, which results in more jobs
-                if self.work_queue.empty() and self.data_queue.empty():
-                    self.work_queue.join()
-                    if self.data_queue.empty():
-                        for p, pipe in self.crawlers:
-                            pipe.send(STOP)
-                        for p, pipe in self.crawlers:
-                            p.join()
-                        break
+        self.crawlers = []
+        for _ in xrange(MAX_PROCESSES):
+            master_pipe, slave_pipe = Pipe()
+            p = Process(target=worker,
+                        args=(self.work_queue, self.data_queue,
+                              self.done, slave_pipe, self.message_queue))
+            p.start()
+            self.crawlers.append((p, master_pipe))
+        while True:
 
-                if not self.data_queue.empty():
-                    data = self.data_queue.get()
-
-                    # if database insertion fails, we want to say that we did it anyway,
-                    # because reprocessing the data is a waste because it will probably fail again
-
-
-                    for href in data['links']:
-                        urlobj = URLAttrs(href)
-                        if href not in self.done:
-                            self.work_queue.put(urlobj.url.geturl())
-                            # print(urlobj.url.geturl())
-
-                    self.done[data['url']] = True
-
-                    
-
-                
-
-            self.message_queue.put("all done")
-
-            while not self.message_queue.empty():
-                print(self.message_queue.get())
-            
-                    
-        except KeyboardInterrupt as e:
-            print("-------------------KEYBOARD INTERRUPT--------------------------")
-            print("-------------------MASTER--------------------------")
-
+            # check for messages from puppets
             for p, pipe in self.crawlers:
-                print(p.pid)
-                pipe.send(STOP)
+                if pipe.poll():
+                    message = pipe.recv()
+                    print("Received message from child ", message)
+                    if message == KILL:
+                        raise KeyboardInterrupt
 
-            for p, pipe in self.crawlers:
-                p.join()
-                print(p.exitcode)
-            ## wtf?  proc need to explicitly return out of a caught exception?
-            ## find out why
-            print("returning")
-            return
+
+            ### since this class is the only thing that can add to the queue,
+            ### it is safe to kill all processess if queue is empty,
+            ### but first must block until all tasks on work queue are processed
+            ### in case more data is placed on the data queue, which results in more jobs
+            if self.work_queue.empty() and self.data_queue.empty():
+                self.work_queue.join()
+                if self.data_queue.empty():
+                    for p, pipe in self.crawlers:
+                        pipe.send(STOP)
+                    for p, pipe in self.crawlers:
+                        p.join()
+                    break
+
+            if not self.data_queue.empty():
+                data = self.data_queue.get()
+
+                # if database insertion fails, we want to say that we did it anyway,
+                # because reprocessing the data is a waste because it will probably fail again
+
+
+                for href in data['links']:
+                    urlobj = URLAttrs(href)
+                    if href not in self.done:
+                        self.work_queue.put(urlobj.url.geturl())
+                        # print(urlobj.url.geturl())
+
+                self.done[data['url']] = True
+
+
+
+
+
+        self.message_queue.put("all done")
+
+        while not self.message_queue.empty():
+            print(self.message_queue.get())
+            
 
 if __name__ == '__main__':
     m = MasterOfPuppets()
     m.run("www.google.com")
+    print("__main__ block")
     
             
 

@@ -34,11 +34,24 @@ class WordUsed(StructuredRel):
     locations = ArrayProperty(required=True)
 
 class Domain(StructuredNode):
-    domain = StringProperty(unique_index=True, required=True)
-    subdomain = StringProperty()
-    suffix = StringProperty()
+    name = StringProperty(unique_index=True, required=True)
 
-    pages = RelationshipTo('WebPage', 'DOMAIN_CONTAINS_PAGE', cardinality=cardinality.ZeroOrMore)
+    subdomain = RelationshipTo('Subdomain', 'DOMAIN_CONTAINS_SUBDOMAIN', cardinality=cardinality.OneOrMore)
+    tld = RelationshipTo('TopLevelDomain', 'TLD_CONTAINS_DOMAIN', cardinality=cardinality.OneOrMore)
+    pages = RelationshipTo('WebPage', 'DOMAIN_CONTAINS_WEBPAGE', cardinality=cardinality.OneOrMore)
+
+class Subdomain(StructuredNode):
+    name = StringProperty(unique_index=True, required=True)
+
+    domain = RelationshipFrom('Domain', 'DOMAIN_CONTAINS_SUBDOMAIN', cardinality=cardinality.OneOrMore)
+
+class TopLevelDomain(StructuredNode):
+    name = StringProperty(unique_index=True, required=False)
+
+    domain = RelationshipFrom('Domain', 'TLD_CONTAINS_DOMAIN', cardinality=cardinality.OneOrMore)
+
+
+    
 
 class WebPage(StructuredNode):
     url = StringProperty(unique_index=True, required=True)

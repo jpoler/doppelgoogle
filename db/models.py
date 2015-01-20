@@ -49,8 +49,6 @@ class TopLevelDomain(StructuredNode):
     name = StringProperty(unique_index=True, required=False)
 
     domain = RelationshipFrom('Domain', 'TLD_CONTAINS_DOMAIN', cardinality=cardinality.OneOrMore)
-
-
     
 
 class WebPage(StructuredNode):
@@ -58,8 +56,8 @@ class WebPage(StructuredNode):
     visited = DateTimeProperty(default=lambda: datetime.datetime.now())
     encoding = StringProperty()
 
-    domain = RelationshipFrom('Domain', 'WEBPAGE_WITHIN_DOMAIN', cardinality=cardinality.One)
-    words = RelationshipTo('Word', 'DOMAIN_CONTAINS_PAGE',
+    domain = RelationshipFrom('Domain', 'DOMAIN_CONTAINS_WEBPAGE', cardinality=cardinality.One)
+    words = RelationshipTo('Word', 'PAGE_CONTAINS_WORD',
                            cardinality=cardinality.ZeroOrMore, model=WordUsed)
     links_to = RelationshipTo('WebPage', 'LINKS_TO',
                               cardinality=cardinality.ZeroOrMore, model=Link)

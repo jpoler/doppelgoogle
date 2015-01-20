@@ -1,11 +1,15 @@
 # set([u'rel', u'text', u'accesskey', u'hreflang', u'href', u'id', u'lang', u'style', u'target', u'title', u'class', u'onclick', u'action', u'data-converttitle-hans', u'type', u'dir', u'tabindex'])
 
+__all__ = ['Link', 'WordUsed', 'Domain', 'WebPage', 'Word']
+
 from neomodel import (StructuredNode, StringProperty, IntegerProperty, DateTimeProperty,
                       RelationshipTo, RelationshipFrom, StructuredRel, cardinality,
                       ArrayProperty)
 
 from uuid import uuid4
 import datetime
+
+
 
 class Link(StructuredRel):
     _href = StringProperty()
@@ -26,7 +30,6 @@ class Link(StructuredRel):
     _tabindex = StringProperty()
     
 class WordUsed(StructuredRel):
-    word = StringProperty(unique_index=True, required=True)
     freq = IntegerProperty(required=True)
     locations = ArrayProperty(required=True)
 

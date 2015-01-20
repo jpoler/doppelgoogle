@@ -112,10 +112,6 @@ def splitport(host):
         return host.rsplit(":", 1)
     return (host, None)
 
-# most of this logic is borrowed
-# probably need to remove anything after the "#"
-
-
 def get_parsed_url(base_url, url):
     try:
         urlobj = URLParser(base_url, url)
@@ -144,7 +140,6 @@ class URLParser(object):
         else:
             raise URLParseException
 
-
 class Worker(Process):
 
     def __init__(self, work_queue, data_queue, done_urls, pipe, *args, **kwargs):
@@ -171,9 +166,7 @@ class Worker(Process):
         del soup
         return data
 
-
     def run(self):
-
         while True:
             try:
                 if self.pipe.poll():
@@ -186,7 +179,6 @@ class Worker(Process):
                         self.data_queue.close()
                         return
 
-
                 while self.deque:
                     try:
                         d = self.deque.pop()
@@ -195,9 +187,6 @@ class Worker(Process):
                     except Full:
                         self.deque.append(d)
                         break
-                    except Exception as e:
-                        print(e)
-
 
                 try:
                     url = self.work_queue.get_nowait()
@@ -212,8 +201,7 @@ class Worker(Process):
             except Exception as e:
                 traceback.print_exc()
                 continue
-
-      
+     
 class LockDict(dict):
 
     def __init__(self, *args, **kwargs):
@@ -254,7 +242,6 @@ class MasterOfPuppets(object):
             exit(1)
         self.data_written = 0
 
-
     def insert_into_db(self, data):
         pass
 
@@ -263,7 +250,6 @@ class MasterOfPuppets(object):
             return self.pipes[child.pid]
         except KeyError:
             return None
-            
 
     # may want to store a pipe under pid instead of in my own list, then active_children()
     # can be used which is certainly safer
@@ -295,16 +281,10 @@ class MasterOfPuppets(object):
             iterations += 1
             # if iterations % 10000 == 0:
             #     print("Iterations: {}, successful_links: {}".format(iterations, successful_links))
-            ### since this class is the only thing that can add to the queue,
-            ### it is safe to kill all processess if queue is empty,
-            ### but first must block until all tasks on work queue are processed
-            ### in case more data is placed on the data queue, which results in more jobs
-#            print("Data written {}".format(self.data_written))
             if self.data_written > self.data_threshold:
 #                if database_size() > self.data_threshold:
                 self.nicely_ask_children_to_stop()
                 break
-
 
             while self.valid_urls:
                 try:
@@ -314,15 +294,11 @@ class MasterOfPuppets(object):
                     self.deque.append(url)
                     break
 
-
-
             if (self.work_queue.empty() and self.data_queue.empty() and not self.valid_urls):
                 self.work_queue.join()
                 if self.data_queue.qsize() == 0:
                     self.nicely_ask_children_to_stop()
                     break
-
-
 
             if not self.data_queue.empty():
                 try:
@@ -337,34 +313,17 @@ class MasterOfPuppets(object):
                 self.done[data["url"]] = True
                 self.data_written += sys.getsizeof(data)
 
-
-
-                # if database insertion fails, we want to say that we did it anyway,
-                # because reprocessing the data is a waste because it will probably fail again
-                
-
                 # Ratio ends up being really lopsided and queue size gets huge while not many links
                 # are processed. Fixing the problem by enforcing a 2:1 ratio of work_queue to data in the database
                 if (self.work_queue.qsize() // successful_links) < 2:
                     links = self.links.pop()
                     for href in links:
-                        # print("qsize {}, urls_done: {}, urls_deferred {}" \
-                        #       "data_queue: {}".format(
-                        #           self.work_queue.qsize(), successful_links, len(self.links),
-                        #           self.data_queue.qsize()))
-                        # print("work_queue_memsize: {} bytes, done_memsize: {} bytes, urls_deferred_memsize: {} bytes" \
-                        #       "data_queue_memsize: {} bytes".format(
-                        #           sys.getsizeof(self.work_queue), sys.getsizeof(self.done),
-                        #           sys.getsizeof(self.links), sys.getsizeof(self.data_queue)))
                         if href not in self.done:
                             urlobj = get_parsed_url(data["url"], href)
                             if urlobj:
                                 self.valid_urls.append(urlobj.url.geturl())
 
 
-
 def run(seed):
     m = MasterOfPuppets()
     m.run(seed)
-
-

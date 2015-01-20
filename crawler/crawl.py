@@ -4,7 +4,7 @@ import os
 import sys
 
 from collections import deque
-from urlparse import urlparse
+from urlparse import urlparse, urljoin
 from multiprocessing import Process, JoinableQueue, Lock, Pipe, active_children
 from Queue import Empty, Full
 import time
@@ -22,6 +22,9 @@ from doppelgoogle.db.size import database_size
 
 if sys.version < 3:
     range = xrange
+
+class URLParseException(Exception):
+    pass
 
 WHITESPACE = set(["\n", "\t", " "])
 HTTP_SCHEME = "http://"
@@ -74,8 +77,8 @@ def get_links(soup):
                 continue
         if "href" not in link.attrs:
             continue
-        urlobj = URLAttrs(link["href"])
-        links[urlobj.url.geturl()] = dict(link.attrs)
+        url = link["href"]
+        links[url] = dict(link.attrs)
     return links
 
 def get_text_only(soup):
@@ -111,21 +114,35 @@ def splitport(host):
 
 # most of this logic is borrowed
 # probably need to remove anything after the "#"
-class URLAttrs(object):
-    def __init__(self, url):
-        self.parse_url(url)
+
+
+def get_parsed_url(base_url, url):
+    try:
+        urlobj = URLParser(base_url, url)
+        print(urlobj.url.geturl())        
+        return urlobj
+
+    except URLParseException as e:
+        print(e)
+        return None
+    except Exception as e:
+        print(e)
     
-    def parse_url(self, url):
+class URLParser(object):
+    def __init__(self, base_url, url):
+        self.parse_url(base_url, url)
+    
+    def parse_url(self, base_url, url):
+        url = urljoin(base_url, url)
         fixed = fix_scheme(url)
         self.url = urlparse(fixed)
         (self.scheme, self.netloc, self.path,
          self.params, self.query, self.fragment) = self.url
         self.host, self.port = splitport(self.netloc)
-        if "." in self.host and not is_ip_address(self.host):
-            self.domain, self.tld  = self.host.rsplit(".", 1)
+        if self.scheme and self.host.count(".") == 2 and not is_ip_address(self.host):
+            self.subdomain, self.domain, self.suffix  = self.host.split(".")
         else:
-            self.domain = self.host
-            self.tld = ""
+            raise URLParseException
 
 
 class Worker(Process):
@@ -140,9 +157,8 @@ class Worker(Process):
 
     def process_url(self, url):
         data = {}
-        urlobj = URLAttrs(url)
         try:
-            connection = urllib.urlopen(urlobj.url.geturl())
+            connection = urllib.urlopen(url)
         except IOError:
             return None
 
@@ -151,7 +167,7 @@ class Worker(Process):
         soup = BeautifulSoup(connection.read())
         data["links"] = get_links(soup)
         data["words"] = get_text(soup)
-        data["url"] = urlobj.url.geturl()
+        data["url"] = url
         del soup
         return data
 
@@ -186,7 +202,6 @@ class Worker(Process):
                 try:
                     url = self.work_queue.get_nowait()
                 except Empty:
-
                     continue
                 data = self.process_url(url)
                 if data:
@@ -227,8 +242,9 @@ class MasterOfPuppets(object):
         prepare_log_dir(LOG_DIR)
         self.log = Logger(LOG_DIR)
         self.links = deque()
+        self.valid_urls = deque()
         # testing hack
-        self.data_threshold = 20000
+        self.data_threshold = 200000
         # self.data_threshold = SETTINGS['MAX_DATABASE_SIZE'] - database_size()
         print(SETTINGS['MAX_DATABASE_SIZE'])
         print(database_size())
@@ -261,7 +277,9 @@ class MasterOfPuppets(object):
             child.join()
 
     def run(self, seed):
-        seed_url = URLAttrs(seed)
+        seed_url = get_parsed_url('', seed)
+        if not seed_url:
+            raise URLParseException("Cannot parse seed URL, which is a bit of a problem\n{}".format(seed))
         self.work_queue.put(seed_url.url.geturl())
 
         for _ in range(MAX_PROCESSES):
@@ -281,22 +299,35 @@ class MasterOfPuppets(object):
             ### it is safe to kill all processess if queue is empty,
             ### but first must block until all tasks on work queue are processed
             ### in case more data is placed on the data queue, which results in more jobs
-            print("Data written {}".format(self.data_written))
+#            print("Data written {}".format(self.data_written))
             if self.data_written > self.data_threshold:
 #                if database_size() > self.data_threshold:
                 self.nicely_ask_children_to_stop()
                 break
 
 
-            if (self.work_queue.empty() and self.data_queue.empty()):
+            while self.valid_urls:
+                try:
+                    url = self.valid_urls.pop()
+                    self.work_queue.put_nowait(url)
+                except Full:
+                    self.deque.append(url)
+                    break
+
+
+
+            if (self.work_queue.empty() and self.data_queue.empty() and not self.valid_urls):
                 self.work_queue.join()
                 if self.data_queue.qsize() == 0:
                     self.nicely_ask_children_to_stop()
                     break
 
+
+
             if not self.data_queue.empty():
                 try:
                     data = self.data_queue.get_nowait()
+                    self.data_queue.task_done()
                 except Empty:
                     continue
                 successful_links += 1
@@ -306,8 +337,11 @@ class MasterOfPuppets(object):
                 self.done[data["url"]] = True
                 self.data_written += sys.getsizeof(data)
 
+
+
                 # if database insertion fails, we want to say that we did it anyway,
                 # because reprocessing the data is a waste because it will probably fail again
+                
 
                 # Ratio ends up being really lopsided and queue size gets huge while not many links
                 # are processed. Fixing the problem by enforcing a 2:1 ratio of work_queue to data in the database
@@ -323,10 +357,10 @@ class MasterOfPuppets(object):
                         #           sys.getsizeof(self.work_queue), sys.getsizeof(self.done),
                         #           sys.getsizeof(self.links), sys.getsizeof(self.data_queue)))
                         if href not in self.done:
-                            urlobj = URLAttrs(href)
-                            self.work_queue.put(urlobj.url.geturl())
+                            urlobj = get_parsed_url(data["url"], href)
+                            if urlobj:
+                                self.valid_urls.append(urlobj.url.geturl())
 
-            # self.violently_destroy_innocent_processes_and_then_self()
 
 
 def run(seed):

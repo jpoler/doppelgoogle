@@ -4,7 +4,7 @@ debugging:
 [ ] figure out what the child processes are blocking on during SIGTERM to master
     this might be as simple as logging before and after every urlopen call
     try a dir(child_process) to see if there is a way to access stack frame
-[ ] figure out a way to quit nicely always!
+[Sort of] figure out a way to quit nicely always!
 
 
 packaging:
@@ -21,12 +21,12 @@ crawler:
 [X] worker (child) class to take urls off of work_queue, process, and put on data_queue
 [X] master class to take data off of data_queue, and add urls to work queue
 [X] master creates child processes
-[ ] child quits nicely when a certain data threshold has been reached
-[ ] master quits when a certain data threshold has been reached
+[X] child quits nicely when a certain data threshold has been reached
+[X] master quits when a certain data threshold has been reached
     this implies after children have exited
 
 database:
-[ ] function to get total database size
+[X] function to get total database size
 [ ] complete data model using neomodel ORM
 [ ] define a function that will insert into database
 [ ] look in to possibly quitting nicely on interrupt so that

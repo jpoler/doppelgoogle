@@ -231,6 +231,7 @@ class MasterOfPuppets(object):
         self.log = Logger(LOG_DIR)
         self.links = deque()
         self.valid_urls = deque()
+        self.attrs = set()
         # testing hack
         self.data_threshold = 200000
         # self.data_threshold = SETTINGS['MAX_DATABASE_SIZE'] - database_size()
@@ -243,7 +244,8 @@ class MasterOfPuppets(object):
         self.data_written = 0
 
     def insert_into_db(self, data):
-        pass
+        for link in data['links']:
+            self.attrs.update(set(data['links'][link].keys()))
 
     def get_pipe(self, child):
         try:
@@ -300,7 +302,7 @@ class MasterOfPuppets(object):
                     self.nicely_ask_children_to_stop()
                     break
 
-            if not self.data_queue.empty():
+            if self.data_queue.qsize() != 0:
                 try:
                     data = self.data_queue.get_nowait()
                     self.data_queue.task_done()
@@ -310,6 +312,7 @@ class MasterOfPuppets(object):
 
                 self.links.append(data["links"])
                 self.insert_into_db(data)
+                print(self.attrs)
                 self.done[data["url"]] = True
                 self.data_written += sys.getsizeof(data)
 

@@ -11,7 +11,7 @@ neoup:
 	@echo 'Neo started!'
 
 crawl:
-	@python dg.py --crawl www.google.com
+	@python dg.py --crawl http://www.google.com
 
 z:
 	@echo 'Zombie processes:'

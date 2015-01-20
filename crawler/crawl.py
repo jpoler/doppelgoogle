@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-
+import tldextract
 import os
 import sys
 
 from collections import deque
-from urlparse import urlparse
+from urlparse import urlparse, urljoin
 from multiprocessing import Process, JoinableQueue, Lock, Pipe, active_children
 from Queue import Empty, Full
 import time
@@ -42,6 +42,9 @@ KILL = 2
 
 LOG_DIR = os.path.join("/tmp", "crawl")
 
+class URLParseException(Exception):
+    pass
+
 def word_generator(s):
     whitespace_handled = False
     start, stop = (0, 0)
@@ -60,13 +63,9 @@ def word_generator(s):
         stop += 1
     raise StopIteration
 
-def fix_scheme(url):
-    if (url.startswith(HTTP_SCHEME) or url.startswith(HTTPS_SCHEME)):
-        return url
-    url = url.lstrip("/")
-    return HTTP_SCHEME + url
+    
 
-def get_links(soup):
+def get_links(soup, base_url):
     links = {}
     for link in soup.find_all("a"):
         if "lang" in link.attrs:
@@ -74,7 +73,7 @@ def get_links(soup):
                 continue
         if "href" not in link.attrs:
             continue
-        urlobj = URLAttrs(link["href"])
+        urlobj = URLAttrs(link["href"], base_url=base_url)
         links[urlobj.url.geturl()] = dict(link.attrs)
     return links
 
@@ -109,23 +108,70 @@ def splitport(host):
         return host.rsplit(":", 1)
     return (host, None)
 
+
 # most of this logic is borrowed
 # probably need to remove anything after the "#"
 class URLAttrs(object):
-    def __init__(self, url):
-        self.parse_url(url)
-    
-    def parse_url(self, url):
-        fixed = fix_scheme(url)
-        self.url = urlparse(fixed)
+    def __init__(self, url, base_url=None):
+        self.parse_url(base_url, url)
+
+    def fix_url(self, base, url):
+        if (url.startswith(HTTP_SCHEME) or url.startswith(HTTPS_SCHEME)):
+            return url
+        if self.is_relative(url):
+            print(base, url)
+            url = urljoin(base, url)
+            if self.is_relative(url):
+                raise URLParseException
+        url = url.lstrip("/")
+        return HTTP_SCHEME + url
+
+    def is_relative(self, url):
+        if url.startswith("/") and (len(url) >= 2) and (url[1] != "/"):
+            return True
+        if url.startswith(".") or url.startswith("..") or url.startswith("../") or url.startswith("./"):
+            return True
+        res = tldextract.extract(url)
+        #definitely relative
+        if not any(res):
+            return True
+        # weird case where we have a relative link with only one segment
+        if url.find("/") == -1 and res.suffix == '':
+            return True
+        return False
+
+        
+
+# if self.path == '' guess that self.host is a relative url? then we take current_url.url.geturl() + self.host
+# if self.host is an ip_address or no periods are contained, self.domain=self.rootdomain=self.subdomain=self.host
+
+# at that point we know that self.host isn't an ip address
+# if one period, we say self.domain, self.tld = self.host.split('.') and self.rootdomain = self.host, self.subdomain = ''
+# if two or more periods, self.subdomain, self.domain, self.tld = self.host.rsplit('.', 2)
+#                                                                 self.rootdomain = self.domain + self.tld
+
+
+
+    def parse_url(self, base_url, url):
+        fixed = self.fix_url(base_url, url)
+
+
+        self.url = urlparse(url)
         (self.scheme, self.netloc, self.path,
          self.params, self.query, self.fragment) = self.url
-        self.host, self.port = splitport(self.netloc)
-        if "." in self.host and not is_ip_address(self.host):
-            self.domain, self.tld  = self.host.rsplit(".", 1)
-        else:
-            self.domain = self.host
-            self.tld = ""
+
+        # if "." in self.host and not is_ip_address(self.host):
+        #     if self.host.count('.') != 2:
+        #         print(self.host)
+        #         print(self.path)
+        #     self.subdomain, self.domain, self.tld  = self.host.rsplit(".", 2)
+        #     self.rootdomain = self.domain + self.tld
+        # else:
+        #     self.domain = self.host
+        #     self.rootdomain = self.host
+        #     self.subdomain = self.host
+        #     self.tld = ""
+
 
 
 class Worker(Process):
@@ -140,7 +186,7 @@ class Worker(Process):
 
     def process_url(self, url):
         data = {}
-        urlobj = URLAttrs(url)
+        urlobj = URLAttrs(url, base_url='TESTING!!!')
         try:
             connection = urllib.urlopen(urlobj.url.geturl())
         except IOError:
@@ -149,7 +195,7 @@ class Worker(Process):
         if connection.headers["content-type"].find("text/html") == -1:
             return None
         soup = BeautifulSoup(connection.read())
-        data["links"] = get_links(soup)
+        data["links"] = get_links(soup, url)
         data["words"] = get_text(soup)
         data["url"] = urlobj.url.geturl()
         del soup
@@ -240,7 +286,11 @@ class MasterOfPuppets(object):
 
 
     def insert_into_db(self, data):
+        # urlobj = URLAttrs(data["url"])
+        # print("domain: {}".format(urlobj.domain))
+        # print("host: {}".format(urlobj.host))
         pass
+        
 
     def get_pipe(self, child):
         try:
@@ -281,7 +331,6 @@ class MasterOfPuppets(object):
             ### it is safe to kill all processess if queue is empty,
             ### but first must block until all tasks on work queue are processed
             ### in case more data is placed on the data queue, which results in more jobs
-            print("Data written {}".format(self.data_written))
             if self.data_written > self.data_threshold:
 #                if database_size() > self.data_threshold:
                 self.nicely_ask_children_to_stop()
@@ -323,8 +372,12 @@ class MasterOfPuppets(object):
                         #           sys.getsizeof(self.work_queue), sys.getsizeof(self.done),
                         #           sys.getsizeof(self.links), sys.getsizeof(self.data_queue)))
                         if href not in self.done:
-                            urlobj = URLAttrs(href)
-                            self.work_queue.put(urlobj.url.geturl())
+                            try:
+                                urlobj = URLAttrs(href, base_url=data['url'])
+                                self.work_queue.put(urlobj.url.geturl())
+                            except URLParseException:
+                                print("Couldn't parse the fucking url")
+                                
 
             # self.violently_destroy_innocent_processes_and_then_self()
 
@@ -334,3 +387,19 @@ def run(seed):
     m.run(seed)
 
 
+    # def __new__(cls, url, current_url=None):
+    #     result = cls.is_relative(url)
+    #     if not result:
+    #         return super(URLAttrs, cls).__new__(cls)
+    #     elif result and current_url:
+    #         print("========================FIXING RELATIVE URL==================")
+    #         url = current_url + url
+    #         return super(URLAttrs, cls).__new__(cls)
+    #     else:
+    #         return None
+
+    # @classmethod
+    # def is_relative(cls, url):
+    #     if url.startswith("..") or url.startswith("."):
+    #         return True
+    #     return False

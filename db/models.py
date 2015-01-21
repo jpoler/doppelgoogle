@@ -1,6 +1,6 @@
 # set([u'rel', u'text', u'accesskey', u'hreflang', u'href', u'id', u'lang', u'style', u'target', u'title', u'class', u'onclick', u'action', u'data-converttitle-hans', u'type', u'dir', u'tabindex'])
 
-__all__ = ['Link', 'WordUsed', 'Domain', 'WebPage', 'Word']
+__all__ = ['Link', 'WordUsed', 'Subdomain', 'Domain', 'TopLevelDomain', 'WebPage', 'Word']
 
 from neomodel import (StructuredNode, StringProperty, IntegerProperty, DateTimeProperty,
                       RelationshipTo, RelationshipFrom, StructuredRel, cardinality,
@@ -52,9 +52,10 @@ class TopLevelDomain(StructuredNode):
     
 
 class WebPage(StructuredNode):
-    url = StringProperty(unique_index=True, required=True)
+    name = StringProperty(unique_index=True, required=True)
     visited = DateTimeProperty(default=lambda: datetime.datetime.now())
-    encoding = StringProperty()
+#    worry about this later    
+#    encoding = StringProperty()
 
     domain = RelationshipFrom('Domain', 'DOMAIN_CONTAINS_WEBPAGE', cardinality=cardinality.One)
     words = RelationshipTo('Word', 'PAGE_CONTAINS_WORD',

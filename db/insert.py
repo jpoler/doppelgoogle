@@ -16,18 +16,26 @@ class InsertionFailed(Exception):
     pass
 
 
-def get_webpage(url):
+def get_model(cls, unique_id):
     try:
-        return WebPage.nodes.get(url=url)
-    except WebPage.DoesNotExist:
+        return cls.nodes.get(name=unique_id)
+    except cls.DoesNotExist:
         return None
 
-def create_webpage_and_domain(url, ):
-    webpage = get_webpage(url)
+def update_webpage(webpage, urlobj):
+    webpage.domain = urlobj.domain
+    webpage.save()
+    return webpage
+    
+def create_webpage(urlobj):
+    webpage = 
+
+def create_webpage_and_domain(urlobj, data):
+    webpage = get_model(WebPage, urlobj)
     if webpage:
-        webpage = update_webpage(urL)
+        webpage = update_webpage(webpage)
     else:
-        webpage = create_webpage(url)
+        webpage = create_webpage(urlobj)
 
     
 
@@ -38,7 +46,7 @@ def insert_data(data):
     words = data['words']
     links = data['links']
 
-    site = create_webpage_and_domain(url)
+    site = create_webpage(urlobj)
     
     created_words = create_words(site, words)
 

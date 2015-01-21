@@ -34,7 +34,7 @@ class WordUsed(StructuredRel):
     locations = ArrayProperty(required=True)
 
 class Domain(StructuredNode):
-    update_attributes = ['name']
+    update_attributes = set([])
     name = StringProperty(unique_index=True, required=True)
 
     subdomain = RelationshipTo('Subdomain', 'DOMAIN_CONTAINS_SUBDOMAIN', cardinality=cardinality.OneOrMore)
@@ -42,20 +42,20 @@ class Domain(StructuredNode):
     pages = RelationshipTo('WebPage', 'DOMAIN_CONTAINS_WEBPAGE', cardinality=cardinality.OneOrMore)
 
 class Subdomain(StructuredNode):
-    update_attributes = ['name']
+    update_attributes = set([])
     name = StringProperty(unique_index=True, required=True)
 
     domain = RelationshipFrom('Domain', 'DOMAIN_CONTAINS_SUBDOMAIN', cardinality=cardinality.OneOrMore)
 
 class TopLevelDomain(StructuredNode):
-    update_attributes = ['name']
+    update_attributes = set([])
     name = StringProperty(unique_index=True, required=False)
 
     domain = RelationshipFrom('Domain', 'TLD_CONTAINS_DOMAIN', cardinality=cardinality.OneOrMore)
     
 
 class WebPage(StructuredNode):
-    update_attributes = set(['name', 'domain'])
+    update_attributes = set(['domain'])
     name = StringProperty(unique_index=True, required=True)
     visited = DateTimeProperty(default=lambda: datetime.datetime.now())
 #    worry about this later    

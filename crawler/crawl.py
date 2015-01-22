@@ -12,10 +12,12 @@ import urllib
 from bs4 import BeautifulSoup
 import traceback
 
+import pickle
+
 import signal
 
 import doppelgoogle.db.models as models
-from doppelgoogle.conf.conf import SETTINGS
+from doppelgoogle.conf.conf import SETTINGS, PICKLE_DUMP_PATH
 from doppelgoogle.log.log import prepare_log_dir, Logger, LOG_DIR
 from doppelgoogle.db.size import database_size
 
@@ -221,6 +223,7 @@ class LockDict(dict):
 class MasterOfPuppets(object):
 
     def __init__(self):
+        print("here")
         self.work_queue = JoinableQueue(QUEUE_MAXSIZE)
         self.data_queue = JoinableQueue(QUEUE_MAXSIZE)
         self.pipes = {}
@@ -240,6 +243,10 @@ class MasterOfPuppets(object):
             self.log.write_log("Database is already larger than max size")
             exit(1)
         self.data_written = 0
+
+        self.pickle_list = []
+        self.data_count = 0
+        self.pickle_file = open(PICKLE_DUMP_PATH, 'w')
 
     def insert_into_db(self, data):
         for link in data['links']:
@@ -281,8 +288,9 @@ class MasterOfPuppets(object):
             iterations += 1
             # if iterations % 10000 == 0:
             #     print("Iterations: {}, successful_links: {}".format(iterations, successful_links))
-            if self.data_written > self.data_threshold:
+            if self.data_count > 100:
 #                if database_size() > self.data_threshold:
+                pickle.dump(self.pickle_list, self.pickle_file)
                 self.nicely_ask_children_to_stop()
                 break
 
@@ -304,6 +312,8 @@ class MasterOfPuppets(object):
                 try:
                     data = self.data_queue.get_nowait()
                     self.data_queue.task_done()
+                    self.pickle_list.append(data)
+                    self.data_count += 1
                 except Empty:
                     continue
                 successful_links += 1

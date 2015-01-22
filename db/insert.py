@@ -1,4 +1,5 @@
 from neomodel import (CypherException, UniqueProperty)
+from neomodel.relationship_manager import RelationshipDefinition
 
 from doppelgoogle.db.models import (Link, WordUsed, Domain, Subdomain,
                                     Subdomain, TopLevelDomain, WebPage, Word)
@@ -37,7 +38,7 @@ class BaseNodeInterface(object):
         
 
     @classmethod
-    def create_or_update_object(cls, name=None, **kwargs):
+    def get_object(cls, name=None, **kwargs):
         if not name:
             raise ValueError("name is a required argument")
         if not cls.model.update_attributes.issuperset(set(kwargs.keys())):
@@ -70,9 +71,62 @@ class WordInterface(BaseNodeInterface):
 ## change the words dictionary to contain a dictionary with freq and locations as keys if not already
 
 
+## mapping of relations objects to their relations
+
+class BaseConnector(object):
+
+    @staticmethod
+    def check_prop(prop, source, target):
+        if isinstance(prop, RelationshipDefinition):
+            return isinstance(source, prop.source_class) and isinstance(target, prop.target_class) \
+                and prop.definition['direction'] == 1:
+        return False
+
+    @staticmethod
+    def check_relation_properties(relation, kwargs):
+        model = relation.definition['model']
+        if not model:
+            return not kwargs
+        keys_set = set(kwargs.keys())
+        return model.valid_properties.issuperset(keys_set)
+            
+
+    @classmethod
+    def connect_objects(cls, source, target, **kwargs):
+        for name, prop in source.defined_properties().iteritems():
+            if cls.check_prop(prop, source, target):
+                # now check to make sure all of the properties are in the relationship definition
+                if cls.check_relation_properties(prop, kwargs):
+                    return prop.connect(target, kwargs)
+        return False
+
+connect_objects = BaseConnector.connect_objects
             
 class PageInserter(object):
 
+    def __init__(self, urlobj):
+        self.urlobj = urlobj
+        self.url = urlobj.url.geturl()
+        self.page = WebPageInterface.get_object(name=self.url)
+        self.subdomain = SubdomainInterface.get_object(name=self.urlobj.subdomain)
+        self.domain = DomainInterface.get_object(name=self.urlobj.domain)
+        self.tld = TopLevelDomainInterface.get_object(name=self.urlobj.tld)
+
+    def make_connections(self):
+        connect_objects(self.domain, self.page)
+        connect_objects(self.domain, self.subdomain)
+        connect_objects(self.domain, self.tld)
+        self.save_objects()
+
+    def save_objects(self):
+        self.page.save()
+        self.subdomain.save()
+        self.domain.save()
+        self.tld.save()
+
+        
+    
+        
     
 
 class DataInserter(object):

@@ -78,8 +78,8 @@ class BaseConnector(object):
     @staticmethod
     def check_prop(prop, source, target):
         if isinstance(prop, RelationshipDefinition):
-            return isinstance(source, prop.source_class) and isinstance(target, prop.target_class) \
-                and prop.definition['direction'] == 1:
+            return (isinstance(source, prop.source_class) and isinstance(target, prop.target_class)
+                    and prop.definition['direction'] == 1)
         return False
 
     @staticmethod
@@ -125,27 +125,24 @@ class PageInserter(object):
         self.domain.save()
         self.tld.save()
 
-    def 
 
         
     
 class WordInserter(object):
-    @classmethod
-    def 
-    
+    pass
 
 class DataInserter(object):
-
-    def __new__
 
     def __init__(self, data):
         self.data = data
         self.urlobj = get_parsed_url(self.data['url'])
+        if not self.urlobj:
+            raise 
+        
 
 
     def insert_data(self):
 
-        return = 
         self.page = PageInserter(self.urlobj)
         
         
@@ -154,19 +151,6 @@ class DataInserter(object):
 
     def 
 
-
-def insert_data(data):
-    url = data['url']
-    urlobj = parse_url('', url)
-    
-    words = data['words']
-    links = data['links']
-
-    site = create_webpage(urlobj)
-    
-    created_words = create_words(site, words)
-
-    created_links = create_links(site, links)
 
     
 

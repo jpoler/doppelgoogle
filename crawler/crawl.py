@@ -18,13 +18,12 @@ import doppelgoogle.db.models as models
 from doppelgoogle.conf.conf import SETTINGS
 from doppelgoogle.log.log import prepare_log_dir, Logger, LOG_DIR
 from doppelgoogle.db.size import database_size
+from doppelgoogle.exceptions.exceptions import URLParseException
 
 
 if sys.version < 3:
     range = xrange
 
-class URLParseException(Exception):
-    pass
 
 WHITESPACE = set(["\n", "\t", " "])
 HTTP_SCHEME = "http://"

@@ -111,6 +111,7 @@ class PageInserter(object):
         self.subdomain = SubdomainInterface.get_object(name=self.urlobj.subdomain)
         self.domain = DomainInterface.get_object(name=self.urlobj.domain)
         self.tld = TopLevelDomainInterface.get_object(name=self.urlobj.tld)
+        self.make_connections()
 
     def make_connections(self):
         connect_objects(self.domain, self.page)
@@ -124,15 +125,34 @@ class PageInserter(object):
         self.domain.save()
         self.tld.save()
 
+    def 
+
         
     
-        
+class WordInserter(object):
+    @classmethod
+    def 
     
 
 class DataInserter(object):
 
-    @classmethod
+    def __new__
 
+    def __init__(self, data):
+        self.data = data
+        self.urlobj = get_parsed_url(self.data['url'])
+
+
+    def insert_data(self):
+
+        return = 
+        self.page = PageInserter(self.urlobj)
+        
+        
+
+    def insert_data(self):
+
+    def 
 
 
 def insert_data(data):

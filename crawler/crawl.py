@@ -121,8 +121,6 @@ def get_parsed_url(base_url, url):
     except URLParseException as e:
         print(e)
         return None
-    except Exception as e:
-        print(e)
     
 class URLParser(object):
     def __init__(self, base_url, url):

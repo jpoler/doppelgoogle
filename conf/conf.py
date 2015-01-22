@@ -1,6 +1,8 @@
 MEGABYTE = 2**20
 GIGABYTE = 2**30
 
+PICKLE_DUMP_PATH = '/home/jdp/doppelgoogle/pickle/data'
+
 DATABASE_PATH = "/home/jdp/neo4j/data"
 MAX_DATABASE_SIZE = MEGABYTE*5
 

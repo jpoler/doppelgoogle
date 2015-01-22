@@ -53,9 +53,6 @@ class BaseNodeInterface(object):
 class DomainInterface(BaseNodeInterface):
     model = Domain
 
-class WebPageInterface(BaseNodeInterface):
-    model = WebPage
-
 class SubdomainInterface(BaseNodeInterface):
     model = Subdomain
 
@@ -65,11 +62,23 @@ class TopLevelDomainInterface(BaseNodeInterface):
 class WebPageInterface(BaseNodeInterface):
     model = WebPage
 
-class BaseRelationInterface(object):
-    pass
 
 
-class 
+class WordInterface(BaseNodeInterface):
+    model = Word
+
+## change the words dictionary to contain a dictionary with freq and locations as keys if not already
+
+
+            
+class PageInserter(object):
+
+    
+
+class DataInserter(object):
+
+    @classmethod
+
 
 
 def insert_data(data):

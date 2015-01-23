@@ -179,9 +179,9 @@ class WordInserter(object):
 
     @classmethod
     def insert_words(cls, words, page):
-        for word, (freq, offsets) in words.iteritems():
+        for word, dct in words.iteritems():
             try:
                 word = cls.create_word(word)
-                connect_objects(page, word)
+                connect_objects(page, word, **dct)
             except (UnicodeError, InvalidUniqueKeyException):
                 continue

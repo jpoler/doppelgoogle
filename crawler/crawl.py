@@ -85,13 +85,14 @@ def get_text_only(soup):
         script.extract()
     return soup.get_text()
 
+
 def digest_text(text):
     word_count = {}
     for word, offset in word_generator(text):
         if word not in UNWANTED_WORDS:
-            freq, offsets = word_count.get(word, [0, []])
-            offsets.append(offset)
-            word_count[word] = [freq+1, offsets]
+            d = word_count.get(word, {'freq': 0, 'offsets': []})
+            d['freq'] = d['freq'] + 1
+            d['offsets'].append(offset)
     return word_count
 
 def get_text(soup):

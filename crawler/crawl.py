@@ -133,7 +133,7 @@ class URLParser(object):
          self.params, self.query, self.fragment) = self.url
         self.host, self.port = splitport(self.netloc)
         if self.scheme and self.host.count(".") == 2 and not is_ip_address(self.host):
-            self.subdomain, self.domain, self.suffix  = self.host.split(".")
+            self.subdomain, self.domain, self.tld  = self.host.split(".")
         else:
             raise URLParseException
 

@@ -4,6 +4,8 @@ from neomodel.relationship_manager import RelationshipDefinition
 from doppelgoogle.db.models import (Link, WordUsed, Domain, Subdomain,
                                     Subdomain, TopLevelDomain, WebPage, Word)
 # from doppelgoogle.url_utils.url import parse_url
+from doppelgoogle.crawler.crawl import URLParser
+from doppelgoogle.exceptions.exceptions import URLParseException, InvalidUniqueKeyException
 
 # I am going to attempt to write this top down for one main reason:
 # if I write my functions to be general enough, then I can originally just use
@@ -40,7 +42,7 @@ class BaseNodeInterface(object):
     @classmethod
     def get_object(cls, name=None, **kwargs):
         if not name:
-            raise ValueError("name is a required argument")
+            raise InvalidUniqueKeyException("name is a required argument")
         if not cls.model.update_attributes.issuperset(set(kwargs.keys())):
             raise ValueError("Invalid arguments for update")
 
@@ -76,10 +78,9 @@ class WordInterface(BaseNodeInterface):
 class BaseConnector(object):
 
     @staticmethod
-    def check_prop(prop, source, target):
+    def check_prop(prop, target):
         if isinstance(prop, RelationshipDefinition):
-            return (isinstance(source, prop.source_class) and isinstance(target, prop.target_class)
-                    and prop.definition['direction'] == 1)
+            return (isinstance(target, prop.definition['node_class']) and prop.definition['direction'] == 1)
         return False
 
     @staticmethod
@@ -94,10 +95,10 @@ class BaseConnector(object):
     @classmethod
     def connect_objects(cls, source, target, **kwargs):
         for name, prop in source.defined_properties().iteritems():
-            if cls.check_prop(prop, source, target):
+            if cls.check_prop(prop, target):
                 # now check to make sure all of the properties are in the relationship definition
                 if cls.check_relation_properties(prop, kwargs):
-                    return prop.connect(target, kwargs)
+                    return source.__dict__[name].connect(target, kwargs)
         return False
 
 connect_objects = BaseConnector.connect_objects
@@ -128,35 +129,35 @@ class PageInserter(object):
 
         
     
-class WordInserter(object):
-    pass
+        
+        
+        
+    
 
+# This class is not catching the exception raised by URLParser on purpose
+#if url is bad, it is responsibility of instantiater to handle error
 class DataInserter(object):
 
     def __init__(self, data):
         self.data = data
-        self.urlobj = get_parsed_url(self.data['url'])
-        if not self.urlobj:
-            raise 
-        
-
+        self.urlobj = URLParser('', self.data['url'])
 
     def insert_data(self):
-
         self.page = PageInserter(self.urlobj)
         
+
         
 
-    def insert_data(self):
+        
 
-    def 
-
-
-    
+        
 
 
     
 
+
+    
+
     
 
     
@@ -164,3 +165,23 @@ class DataInserter(object):
     
     
     
+class WordInserter(object):
+    model = Word
+
+    @classmethod
+    def create_word(cls, word):
+        if isinstance(word, str):
+            word = unicode(word)
+                
+        clean = filter(unicode.isalpha, word.lower())
+        return WordInterface.get_object(name=clean)
+
+
+    @classmethod
+    def insert_words(cls, words, page):
+        for word, (freq, offsets) in words.iteritems():
+            try:
+                word = cls.create_word(word)
+                connect_objects(page, word)
+            except (UnicodeError, InvalidUniqueKeyException):
+                continue

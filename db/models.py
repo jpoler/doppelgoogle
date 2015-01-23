@@ -12,6 +12,10 @@ import datetime
 
 
 class Link(StructuredRel):
+    valid_properties = set(['_href', '_link_rel', '_target', '_text',
+                            '_accesskey', '_hreflang', '_id', '_lang',
+                            '_style', '_title', '_class', '_onclick',
+                            '_action', '_type', '_dir', '_tabindex'])
     _href = StringProperty()
     _link_rel = StringProperty()
     _target = StringProperty()
@@ -30,8 +34,10 @@ class Link(StructuredRel):
     _tabindex = StringProperty()
     
 class WordUsed(StructuredRel):
+    valid_properties = set(['freq', 'offsets'])
+    
     freq = IntegerProperty(required=True)
-    locations = ArrayProperty(required=True)
+    offsets = ArrayProperty(required=True)
 
 class Domain(StructuredNode):
     update_attributes = set([])
@@ -70,7 +76,7 @@ class WebPage(StructuredNode):
                                   cardinality=cardinality.ZeroOrMore, model=Link)
 
 class Word(StructuredNode):
-    update_attributes = ['name']
+    update_attributes = set(['name'])
     name = StringProperty(unique_index=True, required=True)
     webpages = RelationshipFrom('WebPage', 'PAGE_CONTAINS_WORD',
                                 cardinality=cardinality.ZeroOrMore, model=WordUsed)

@@ -2,6 +2,8 @@ LOGDIR=/tmp/crawl
 
 default: crawl
 
+test:
+	python /home/jdp/doppelgoogle/doppelgoogle/db/test_inserts.py
 
 neoup:
 	@echo 'Starting neo...'

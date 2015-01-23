@@ -93,6 +93,8 @@ def digest_text(text):
             d = word_count.get(word, {'freq': 0, 'offsets': []})
             d['freq'] = d['freq'] + 1
             d['offsets'].append(offset)
+            if d['freq'] == 1:
+                word_count[word] = d
     return word_count
 
 def get_text(soup):

@@ -146,23 +146,6 @@ class DataInserter(object):
         self.page = PageInserter(self.urlobj)
         
 
-        
-
-        
-
-        
-
-
-    
-
-
-    
-
-    
-
-    
-
-    
     
     
 class WordInserter(object):
@@ -183,5 +166,7 @@ class WordInserter(object):
             try:
                 word = cls.create_word(word)
                 connect_objects(page, word, **dct)
+                word.save()
             except (UnicodeError, InvalidUniqueKeyException):
                 continue
+        page.save()

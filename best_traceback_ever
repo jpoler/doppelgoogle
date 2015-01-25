@@ -1,0 +1,105 @@
+('quitting', 7739)
+('quitting', 7741)
+('quitting', 7740)
+('quitting', 7742)
+^CTraceback (most recent call last):
+  File "dg.py", line 23, in <module>
+    crawler_run(*args.args)
+  File "/home/jdp/doppelgoogle/doppelgoogle/crawler/crawl.py", line 340, in run
+    m.run(seed)
+  File "/home/jdp/doppelgoogle/doppelgoogle/crawler/crawl.py", line 294, in run
+    self.nicely_ask_children_to_stop()
+  File "/home/jdp/doppelgoogle/doppelgoogle/crawler/crawl.py", line 270, in nicely_ask_children_to_stop
+    child.join()
+  File "/usr/lib/python2.7/multiprocessing/process.py", line 145, in join
+    res = self._popen.wait(timeout)
+  File "/usr/lib/python2.7/multiprocessing/forking.py", line 154, in wait
+    return self.poll(0)
+  File "/usr/lib/python2.7/multiprocessing/forking.py", line 135, in poll
+    pid, sts = os.waitpid(self.pid, flag)
+KeyboardInterrupt
+^CError in atexit._run_exitfuncs:
+Traceback (most recent call last):
+  File "/usr/lib/python2.7/atexit.py", line 24, in _run_exitfuncs
+    func(*targs, **kargs)
+  File "/usr/lib/python2.7/multiprocessing/util.py", line 325, in _exit_function
+    p.join()
+  File "/usr/lib/python2.7/multiprocessing/process.py", line 145, in join
+    res = self._popen.wait(timeout)
+  File "/usr/lib/python2.7/multiprocessing/forking.py", line 154, in wait
+    return self.poll(0)
+  File "/usr/lib/python2.7/multiprocessing/forking.py", line 135, in poll
+    pid, sts = os.waitpid(self.pid, flag)
+KeyboardInterrupt
+Error in sys.exitfunc:
+Traceback (most recent call last):
+  File "/usr/lib/python2.7/atexit.py", line 24, in _run_exitfuncs
+    func(*targs, **kargs)
+  File "/usr/lib/python2.7/multiprocessing/util.py", line 325, in _exit_function
+    p.join()
+  File "/usr/lib/python2.7/multiprocessing/process.py", line 145, in join
+    res = self._popen.wait(timeout)
+  File "/usr/lib/python2.7/multiprocessing/forking.py", line 154, in wait
+    return self.poll(0)
+  File "/usr/lib/python2.7/multiprocessing/forking.py", line 135, in poll
+    pid, sts = os.waitpid(self.pid, flag)
+KeyboardInterrupt
+make: *** [crawl] Error 1
+
+(doppelgoogle)jdp@ThinkPad-T440s:~/doppelgoogle/doppelgoogle
+$ Traceback (most recent call last):
+  File "/usr/lib/python2.7/multiprocessing/queues.py", line 266, in _feed
+    send(obj)
+IOError: [Errno 32] Broken pipe
+Process Worker-2:
+Traceback (most recent call last):
+  File "/usr/lib/python2.7/multiprocessing/process.py", line 261, in _bootstrap
+    util._exit_function()
+  File "/usr/lib/python2.7/multiprocessing/util.py", line 328, in _exit_function
+    _run_finalizers()
+  File "/usr/lib/python2.7/multiprocessing/util.py", line 274, in _run_finalizers
+    finalizer()
+  File "/usr/lib/python2.7/multiprocessing/util.py", line 207, in __call__
+    res = self._callback(*self._args, **self._kwargs)
+  File "/usr/lib/python2.7/multiprocessing/queues.py", line 214, in _finalize_join
+    thread.join()
+  File "/usr/lib/python2.7/threading.py", line 949, in join
+    self.__block.wait()
+  File "/usr/lib/python2.7/threading.py", line 339, in wait
+    waiter.acquire()
+KeyboardInterrupt
+Process Worker-1:
+Traceback (most recent call last):
+  File "/usr/lib/python2.7/multiprocessing/process.py", line 261, in _bootstrap
+    util._exit_function()
+  File "/usr/lib/python2.7/multiprocessing/util.py", line 328, in _exit_function
+    _run_finalizers()
+  File "/usr/lib/python2.7/multiprocessing/util.py", line 274, in _run_finalizers
+    finalizer()
+  File "/usr/lib/python2.7/multiprocessing/util.py", line 207, in __call__
+    res = self._callback(*self._args, **self._kwargs)
+  File "/usr/lib/python2.7/multiprocessing/queues.py", line 214, in _finalize_join
+    thread.join()
+  File "/usr/lib/python2.7/threading.py", line 949, in join
+    self.__block.wait()
+  File "/usr/lib/python2.7/threading.py", line 339, in wait
+    waiter.acquire()
+KeyboardInterrupt
+Process Worker-3:
+Traceback (most recent call last):
+  File "/usr/lib/python2.7/multiprocessing/process.py", line 261, in _bootstrap
+    util._exit_function()
+  File "/usr/lib/python2.7/multiprocessing/util.py", line 328, in _exit_function
+    _run_finalizers()
+  File "/usr/lib/python2.7/multiprocessing/util.py", line 274, in _run_finalizers
+    finalizer()
+  File "/usr/lib/python2.7/multiprocessing/util.py", line 207, in __call__
+    res = self._callback(*self._args, **self._kwargs)
+  File "/usr/lib/python2.7/multiprocessing/queues.py", line 214, in _finalize_join
+    thread.join()
+  File "/usr/lib/python2.7/threading.py", line 949, in join
+    self.__block.wait()
+  File "/usr/lib/python2.7/threading.py", line 339, in wait
+    waiter.acquire()
+KeyboardInterrupt
+^C

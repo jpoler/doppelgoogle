@@ -1,0 +1,23 @@
+increased allowed filesize for jdp to 40000
+
+Should definitely change this to just be neo4j instead of jdp, and execute the server start as neo4j somehow
+
+Things to understand better
+       what is happening while blocking on recv (is it the database doing work? likely)
+       read about indexing -- DEFINITELY CHECK THIS OUT
+       figure out if it is the saving that is slowing things down
+
+looks like removing save speeds things up a little bit, try using batch creation, and just overall make
+the code hit the database less if at all possible
+
+according to the py2neo docs, a single attribute update caused communication with the server!
+No wonder it sucked!!!
+no longer the case in py2neo 2.0
+
+from py2neo import watch could make things really fun
+
+graph.push() for batching
+
+
+
+

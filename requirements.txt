@@ -1,11 +1,11 @@
 Flask==0.10.1
 Jinja2==2.7.3
 MarkupSafe==0.23
+Pygments==2.0.2
 Werkzeug==0.9.6
-argparse==1.2.1
-beautifulsoup4==4.3.2
+blessings==1.6
+bpython==0.13-448
+curtsies==0.1.17
+greenlet==0.4.5
 itsdangerous==0.24
-neomodel==1.0.2
-py2neo==1.6.4
-pytz==2014.7
-wsgiref==0.1.2
+requests==2.5.1

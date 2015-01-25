@@ -4,26 +4,21 @@ import os
 import sys
 
 from collections import deque
-from urlparse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin
 from multiprocessing import Process, JoinableQueue, Lock, Pipe, active_children
-from Queue import Empty, Full
+from queue import Empty, Full
 import time
-import urllib
+from urllib.request import urlopen
 from bs4 import BeautifulSoup
 import traceback
 
 import signal
 
-import doppelgoogle.db.models as models
+
 from doppelgoogle.conf.conf import SETTINGS
 from doppelgoogle.log.log import prepare_log_dir, Logger, LOG_DIR
 from doppelgoogle.db.size import database_size
 from doppelgoogle.exceptions.exceptions import URLParseException
-
-
-if sys.version < 3:
-    range = xrange
-
 
 WHITESPACE = set(["\n", "\t", " "])
 HTTP_SCHEME = "http://"
@@ -153,7 +148,7 @@ class Worker(Process):
     def process_url(self, url):
         data = {}
         try:
-            connection = urllib.urlopen(url)
+            connection = urlopen(url)
         except IOError:
             return None
 
@@ -256,6 +251,7 @@ class MasterOfPuppets(object):
     # may want to store a pipe under pid instead of in my own list, then active_children()
     # can be used which is certainly safer
     def nicely_ask_children_to_stop(self):
+        raise KeyboardInterrupt
         for child in active_children():
             pipe = self.get_pipe(child)
             if pipe:

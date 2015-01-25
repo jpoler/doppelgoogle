@@ -4,10 +4,6 @@ import datetime
 from multiprocessing import Process
 import time
 
-if sys.version < 3:
-    range = xrange
-
-
 TEMP_DIR = '/tmp'
 LOG_DIR = os.path.join(TEMP_DIR, "crawl")
 

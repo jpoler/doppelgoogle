@@ -21,7 +21,6 @@ else:
 g = Graph()
 tx = g.cypher.begin()
 
-# q = insert.InsertQuery(g)
 
 uq = insert.UniquenessConstraintQuery(g)
 constraints = [
@@ -47,11 +46,16 @@ print(uq.add_constraints_and_execute(constraints))
 
 
 page_repr1 = WebPageRepr(name='http://en.wikipedia.org/wiki/Computer')
-page_repr2 = WebPageRepr(name='foo')
+page_repr2 = WebPageRepr(name='http://www.google.com')
+link_repr1 = LinkRepr(href='http://www.google.com', lang='en')
 
-q.merge_statement(page_repr1)
-q.merge_statement(page_repr2)
+q = insert.InsertQuery(g)
+q.merge_node(page_repr1)
+q.merge_node(page_repr2)
+q.create_relation(page_repr1, page_repr2, 'LINKS_TO', attrs=link_repr1)
 q.query.append("RETURN n1")
 q.execute()
+
+
 
 

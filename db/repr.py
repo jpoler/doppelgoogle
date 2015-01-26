@@ -1,6 +1,6 @@
 
 
-__all__ = ['WebPageRepr', 'WordRepr', 'DomainRepr', 'SubdomainRepr', 'TLDRepr']
+__all__ = ['WebPageRepr', 'WordRepr', 'DomainRepr', 'SubdomainRepr', 'TLDRepr', 'LinkRepr']
 
 import datetime
 
@@ -41,3 +41,6 @@ class SubdomainRepr(BaseRepr):
 
 class TLDRepr(BaseRepr):
     label = 'TLD'
+
+class LinkRepr(BaseRepr):
+    label = 'Link'

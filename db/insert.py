@@ -4,12 +4,16 @@ from py2neo.cypher import CypherTransaction
 class QueryMeta(type):
 
     def __init__(cls, name, bases, dct):
-        base_query = '%s ({id}:{label} {repr})'
-        cls.base_query = base_query
+        base_node_query = '%s ({id}:{label} {repr})'
+        outgoing_relation_query = '%s ({a})-[{r}:{relation} {repr}]->({b})'
+        incoming_relation_query = '%s ({a})<-[{r}:{relation} {repr}]-({b})'
+        cls.base_node_query = base_node_query
         query_types = ['MATCH', 'MERGE', 'CREATE']
     
         for q_type in query_types:
-            setattr(cls, q_type, base_query % (q_type,))
+            setattr(cls, '{0}_NODE'.format(q_type), base_node_query % (q_type,))
+            setattr(cls, '{0}_RELATION'.format(q_type), outgoing_relation_query % (q_type,))
+            # do incoming
         
         cls.CREATE_CONSTRAINT_ON = 'CREATE CONSTRAINT ON ({id}:{label}) ASSERT {id}.{prop} IS UNIQUE'
         cls.CREATE_INDEX_ON  = 'CREATE INDEX ON :{label}({prop})'
@@ -20,13 +24,15 @@ class Query(object, metaclass = QueryMeta):
 
 
     def __init__(self, graph, *args, **kwargs):
+        # maybe make a factory function for ideas, refactor later
         self.id = 0
         self.dct = {}
         self.query = []
         self.graph = graph
         
-    def base_statement(self, s, obj):
+    def base_node_statement(self, s, obj):
         statement_id = "n" + str(self.id)
+        self.id += 1
         self.dct[obj.name] = statement_id
         params = {
             'id': statement_id,
@@ -35,8 +41,19 @@ class Query(object, metaclass = QueryMeta):
         }
         q = s.format(**params)
         self.query.append(q)
-        self.id += 1
 
+    def base_relation_statement(self, s, source, target, relation, attrs):
+        rid = 'r' + str(self.id)
+        self.id += 1
+        params = {
+            'a': self.dct[source.name],
+            'b': self.dct[target.name],
+            'r': rid, # might be unnecessary
+            'relation': relation,
+            'repr': str(attrs) if attrs else "",
+        }
+        q = s.format(**params)
+        self.query.append(q)
 
     def execute(self):
         return self.graph.cypher.execute("\n".join(self.query))
@@ -68,13 +85,17 @@ class UniquenessConstraintQuery(Query):
 
 class InsertQuery(Query):
 
-    def match_statement(self, obj):
-        return self.base_statement(self.MATCH, obj)
+    def match_node(self, obj):
+        return self.base_node_statement(self.MATCH_NODE, obj)
 
-    def merge_statement(self, obj):
-        return self.base_statement(self.MERGE, obj)
+    def merge_node(self, obj):
+        return self.base_node_statement(self.MERGE_NODE, obj)
 
+    def create_node(self, obj):
+        return self.base_node_statement(self.CREATE_NODE, obj)
 
+    def create_relation(self, source, target, relation, attrs=None):
+        self.base_relation_statement(self.CREATE_RELATION, source, target, relation, attrs)
         
 
 

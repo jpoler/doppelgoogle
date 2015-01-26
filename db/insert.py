@@ -1,4 +1,6 @@
+import itertools
 from py2neo.cypher import CypherTransaction
+
 
 
 class QueryMeta(type):
@@ -20,19 +22,22 @@ class QueryMeta(type):
         return super(QueryMeta, cls).__init__(name, bases, dct)
         
 
-class Query(object, metaclass = QueryMeta):
+class Query(object, metaclass=QueryMeta):
 
 
     def __init__(self, graph, *args, **kwargs):
         # maybe make a factory function for ideas, refactor later
-        self.id = 0
+        self.id = itertools.count()
         self.dct = {}
         self.query = []
         self.graph = graph
+
+    def get_id(self):
+        return "n" + str(next(self.id))
+        
         
     def base_node_statement(self, s, obj):
-        statement_id = "n" + str(self.id)
-        self.id += 1
+        statement_id = self.get_id()
         self.dct[obj.name] = statement_id
         params = {
             'id': statement_id,
@@ -43,8 +48,7 @@ class Query(object, metaclass = QueryMeta):
         self.query.append(q)
 
     def base_relation_statement(self, s, source, target, relation, attrs):
-        rid = 'r' + str(self.id)
-        self.id += 1
+        rid = self.get_id()
         params = {
             'a': self.dct[source.name],
             'b': self.dct[target.name],
@@ -75,12 +79,12 @@ class UniquenessConstraintQuery(Query):
 
     def add_constraints_and_execute(self, constraints):
         for dct in constraints:
-            cid = "n" + str(self.id)
+            cid = self.get_id()
             if not (('label' in dct) and ('prop' in dct)):
                 raise ValueError("label and prop are both needed (UniquenessConstraintQuery)")
             dct['id'] = cid
             self.graph.cypher.execute(self.CREATE_CONSTRAINT_ON.format(**dct))
-            self.id += 1
+
 
 
 class InsertQuery(Query):

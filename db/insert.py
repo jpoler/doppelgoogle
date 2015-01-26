@@ -1,6 +1,6 @@
 import itertools
 from py2neo.cypher import CypherTransaction
-
+from copy import copy
 
 
 class QueryMeta(type):
@@ -8,14 +8,20 @@ class QueryMeta(type):
     def __init__(cls, name, bases, dct):
         base_node_query = '%s ({id}:{label} {repr})'
         outgoing_relation_query = '%s ({a})-[{r}:{relation} {repr}]->({b})'
-        incoming_relation_query = '%s ({a})<-[{r}:{relation} {repr}]-({b})'
+        # incoming_relation_query = '%s ({a})<-[{r}:{relation} {repr}]-({b})'
         cls.base_node_query = base_node_query
         query_types = ['MATCH', 'MERGE', 'CREATE']
+        cls.node_queries = []
+        cls.relation_queries = []
     
         for q_type in query_types:
-            setattr(cls, '{0}_NODE'.format(q_type), base_node_query % (q_type,))
-            setattr(cls, '{0}_RELATION'.format(q_type), outgoing_relation_query % (q_type,))
-            # do incoming
+            name = '{0}_NODE'.format(q_type)
+            setattr(cls, name, base_node_query % (q_type,))
+            cls.node_queries.append((name, getattr(cls, name)))
+            name = '{0}_RELATION'.format(q_type)
+            setattr(cls, name, outgoing_relation_query % (q_type,))
+            cls.relation_queries.append((name, getattr(cls, name)))
+            # do incoming (not sure if this is needed)
         
         cls.CREATE_CONSTRAINT_ON = 'CREATE CONSTRAINT ON ({id}:{label}) ASSERT {id}.{prop} IS UNIQUE'
         cls.CREATE_INDEX_ON  = 'CREATE INDEX ON :{label}({prop})'
@@ -44,6 +50,7 @@ class Query(object, metaclass=QueryMeta):
             'label': obj.label,
             'repr': str(obj)
         }
+        print(s)
         q = s.format(**params)
         self.query.append(q)
 
@@ -86,21 +93,30 @@ class UniquenessConstraintQuery(Query):
             self.graph.cypher.execute(self.CREATE_CONSTRAINT_ON.format(**dct))
 
 
+def add_query_functions(cls):
+    def node_func_factory(name, query):
+        def f(self, obj):
+            return self.base_node_statement(query, obj)
+        f.__name__ = name.lower()
+        return f
 
-class InsertQuery(Query):
-
-    def match_node(self, obj):
-        return self.base_node_statement(self.MATCH_NODE, obj)
-
-    def merge_node(self, obj):
-        return self.base_node_statement(self.MERGE_NODE, obj)
-
-    def create_node(self, obj):
-        return self.base_node_statement(self.CREATE_NODE, obj)
-
-    def create_relation(self, source, target, relation, attrs=None):
-        self.base_relation_statement(self.CREATE_RELATION, source, target, relation, attrs)
+    def relation_func_factory(name, query):
+        def f(self, source, target, relation, attrs=None):
+            return self.base_relation_statement(query, source, target, relation, attrs)
+        f.__name__ = name.lower()
+        return f
         
+    for name, nq in cls.node_queries:
+        f = node_func_factory(name, nq)
+        setattr(cls, f.__name__, f)
 
+    for name, nq in cls.relation_queries:
+        g = relation_func_factory(name, nq)
+        setattr(cls, g.__name__, g)
 
+    return cls
+    
 
+@add_query_functions
+class InsertQuery(Query):
+    pass
